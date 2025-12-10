@@ -1,14 +1,25 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Calendar, Clock, Trophy, TrendingUp, Dumbbell } from 'lucide-react';
 import useWorkoutStore from '../store/useWorkoutStore';
 import { workouts } from '../data/workouts';
 import BottomNav from '../components/BottomNav';
+import { AreaChart, Area, ResponsiveContainer, YAxis } from 'recharts';
 
 const WorkoutSessionDetailView = () => {
   const { workoutId, date } = useParams();
   const navigate = useNavigate();
   const history = useWorkoutStore((state) => state.history);
+  
+  // Debug logging
+  console.log('WorkoutSessionDetailView - workoutId:', workoutId, 'date:', date);
+  
+  // --- FIX: WARTEN BIS DER BROWSER BEREIT IST (Verhindert Chart-Absturz) ---
+  const [isReady, setIsReady] = useState(false);
+  useEffect(() => {
+    const timer = setTimeout(() => setIsReady(true), 500); 
+    return () => clearTimeout(timer);
+  }, []);
   
   // Workout-Daten aus workouts.js holen
   const workout = workouts[workoutId];
@@ -48,17 +59,55 @@ const WorkoutSessionDetailView = () => {
         }
       });
 
+      // --- CHART DATEN: Letzte 10 Sessions für diese Übung ---
+      const chartData = [];
+      const allDates = Object.keys(exerciseHistory).sort((a, b) => new Date(a) - new Date(b));
+      
+      // Nimm die letzten 10 Sessions (inklusive aktuelles Datum)
+      const recentDates = allDates.slice(-10);
+      
+      recentDates.forEach(sessionDate => {
+        const sessionSets = exerciseHistory[sessionDate] || [];
+        let sessionMax = 0;
+        
+        sessionSets.forEach(set => {
+          if (set && set.weight) {
+            const w = parseFloat(set.weight) || 0;
+            if (w > sessionMax) sessionMax = w;
+          }
+        });
+        
+        if (sessionMax > 0) {
+          const dateObj = new Date(sessionDate);
+          chartData.push({
+            date: sessionDate,
+            dateFormatted: dateObj.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' }),
+            weight: sessionMax,
+            rawDate: dateObj
+          });
+        }
+      });
+
+      // Sortiere nach Datum
+      chartData.sort((a, b) => a.rawDate - b.rawDate);
+      
+      // Debug: Log chart data
+      console.log(`Chart data for ${exercise.name}:`, chartData.length, 'sessions', chartData);
+
       return {
         ...exercise,
-        sets,
+        setsData: sets, // Umbenennen, um Konflikt zu vermeiden
+        sets, // Behalte die ursprüngliche sets-Anzahl
         maxWeight,
         totalVolume,
-        hasData: sets.length > 0
+        hasData: sets.length > 0,
+        chartData // Historie für Mini-Chart
       };
     }) || [];
 
     // Gesamt-Max-Gewicht berechnen
-    const overallMaxWeight = Math.max(...exercisesWithData.map(ex => ex.maxWeight), 0);
+    const maxWeights = exercisesWithData.map(ex => ex.maxWeight).filter(w => w > 0);
+    const overallMaxWeight = maxWeights.length > 0 ? Math.max(...maxWeights) : 0;
     
     // Gesamt-Volumen berechnen
     const totalVolume = exercisesWithData.reduce((sum, ex) => sum + ex.totalVolume, 0);
@@ -72,12 +121,39 @@ const WorkoutSessionDetailView = () => {
     };
   }, [workout, date, history, sessionData]);
 
-  if (!workout || !sessionDetails) {
+  if (!workout) {
     return (
       <div className="bg-gray-50 min-h-screen pb-32 font-sans">
         <div className="p-6 text-center">
           <p className="text-gray-500">Workout nicht gefunden</p>
+          <p className="text-xs text-gray-400 mt-2">workoutId: {workoutId}</p>
           <button onClick={() => navigate(-1)} className="mt-4 text-[#453ACF]">Zurück</button>
+        </div>
+        <BottomNav />
+      </div>
+    );
+  }
+
+  // Wenn keine Details, zeige trotzdem die Seite mit leeren Daten
+  if (!sessionDetails) {
+    return (
+      <div className="bg-gray-50 min-h-screen pb-32 font-sans">
+        <div className="sticky top-0 bg-white/90 backdrop-blur-md z-20 px-6 py-4 flex items-center gap-4 border-b border-gray-100">
+          <button 
+            onClick={() => navigate(-1)} 
+            className="w-10 h-10 flex items-center justify-center bg-gray-100 hover:bg-gray-200 rounded-full transition-colors -ml-2"
+          >
+            <ArrowLeft size={20} className="text-gray-700" />
+          </button>
+          <div className="flex-1">
+            <h1 className="text-lg font-bold text-gray-900 truncate">{workout?.title || 'Workout'}</h1>
+          </div>
+        </div>
+        <div className="p-6 text-center">
+          <p className="text-gray-500">Keine Daten für dieses Datum gefunden</p>
+          <p className="text-xs text-gray-400 mt-2">Datum: {date}</p>
+          <p className="text-xs text-gray-400 mt-1">Workout: {workoutId}</p>
+          <button onClick={() => navigate(-1)} className="mt-4 px-4 py-2 bg-[#453ACF] text-white rounded-lg">Zurück</button>
         </div>
         <BottomNav />
       </div>
@@ -215,7 +291,7 @@ const WorkoutSessionDetailView = () => {
                     <h4 className="font-bold text-gray-900 text-lg leading-tight mb-1">{exercise.name}</h4>
                     <div className="flex gap-2 flex-wrap">
                       <span className="bg-gray-100 text-gray-600 text-xs font-bold px-2 py-1 rounded-md">
-                        {exercise.sets} Sets
+                        {exercise.sets?.length || exercise.sets || 0} Sets
                       </span>
                       <span className="bg-gray-100 text-gray-600 text-xs font-bold px-2 py-1 rounded-md">
                         {exercise.reps} Reps
@@ -232,7 +308,7 @@ const WorkoutSessionDetailView = () => {
                 {/* SETS */}
                 {exercise.hasData ? (
                   <div className="space-y-2 pt-3 border-t border-gray-50">
-                    {exercise.sets.map((set) => (
+                    {exercise.setsData?.map((set) => (
                       <div 
                         key={set.setNumber}
                         className={`flex justify-between items-center p-2 rounded-lg ${
@@ -253,6 +329,92 @@ const WorkoutSessionDetailView = () => {
                 ) : (
                   <div className="pt-3 border-t border-gray-50 text-center py-4">
                     <p className="text-sm text-gray-400">Keine Daten für diese Übung</p>
+                  </div>
+                )}
+
+                {/* --- MINI CHART: Fortschritt der letzten Sessions --- */}
+                {isReady && exercise.chartData && exercise.chartData.length > 0 && (
+                  <div className="mt-4 pt-3 border-t border-gray-50">
+                    <div className="mb-2">
+                      <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">
+                        Fortschritt {exercise.chartData.length > 1 ? `(letzte ${exercise.chartData.length} Sessions)` : '(diese Session)'}
+                      </p>
+                      {exercise.chartData.length > 1 && (() => {
+                        const startWeight = exercise.chartData[0].weight;
+                        const endWeight = exercise.chartData[exercise.chartData.length - 1].weight;
+                        const absoluteDiff = endWeight - startWeight;
+                        const percentDiff = startWeight > 0 ? ((absoluteDiff / startWeight) * 100) : 0;
+                        const isPositive = absoluteDiff > 0;
+                        const isNegative = absoluteDiff < 0;
+                        
+                        return (
+                          <div className="flex items-center gap-3 text-xs text-gray-500">
+                            <span>{startWeight} kg</span>
+                            <span className="text-gray-300">→</span>
+                            <span className="font-medium text-gray-700">{endWeight} kg</span>
+                            {(absoluteDiff !== 0) && (
+                              <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded ${
+                                isPositive ? 'bg-green-50 text-green-600' : 
+                                isNegative ? 'bg-red-50 text-red-600' : 
+                                'bg-gray-100 text-gray-500'
+                              }`}>
+                                {isPositive ? '+' : ''}{absoluteDiff.toFixed(1)} kg
+                              </span>
+                            )}
+                          </div>
+                        );
+                      })()}
+                    </div>
+                    {exercise.chartData.length > 1 ? (
+                      <>
+                        <div className="h-16 w-full">
+                          <ResponsiveContainer width="100%" height="100%">
+                            <AreaChart data={exercise.chartData}>
+                              <defs>
+                                <linearGradient id={`grad-session-${exercise.id.replace(/[^a-zA-Z0-9]/g, '')}`} x1="0" y1="0" x2="0" y2="1">
+                                  <stop offset="0%" stopColor="#453ACF" stopOpacity={0.4}/>
+                                  <stop offset="100%" stopColor="#453ACF" stopOpacity={0}/>
+                                </linearGradient>
+                              </defs>
+                              <YAxis domain={['dataMin - 2.5', 'dataMax + 2.5']} hide />
+                              <Area 
+                                type="monotone" 
+                                dataKey="weight" 
+                                stroke="#453ACF" 
+                                strokeWidth={2} 
+                                fill={`url(#grad-session-${exercise.id.replace(/[^a-zA-Z0-9]/g, '')})`}
+                                dot={{ r: 2, fill: "#453ACF", strokeWidth: 0, fillOpacity: 1 }} 
+                                isAnimationActive={false}
+                              />
+                            </AreaChart>
+                          </ResponsiveContainer>
+                        </div>
+                        {exercise.chartData.length > 1 && (() => {
+                          const startWeight = exercise.chartData[0].weight;
+                          const endWeight = exercise.chartData[exercise.chartData.length - 1].weight;
+                          const absoluteDiff = endWeight - startWeight;
+                          const percentDiff = startWeight > 0 ? ((absoluteDiff / startWeight) * 100) : 0;
+                          const isPositive = absoluteDiff > 0;
+                          const isNegative = absoluteDiff < 0;
+                          
+                          return absoluteDiff !== 0 ? (
+                            <div className="mt-2 text-center">
+                              <span className={`text-[10px] text-gray-500 ${
+                                isPositive ? 'text-green-600' : 
+                                isNegative ? 'text-red-600' : 
+                                ''
+                              }`}>
+                                {isPositive ? '+' : ''}{percentDiff.toFixed(1)}% Veränderung
+                              </span>
+                            </div>
+                          ) : null;
+                        })()}
+                      </>
+                    ) : (
+                      <div className="h-16 w-full flex items-center justify-center bg-gray-50 rounded-lg">
+                        <p className="text-xs text-gray-400">Noch keine Historie verfügbar</p>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>

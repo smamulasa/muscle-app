@@ -216,12 +216,33 @@ const HomeView = () => {
           <div className="space-y-4">
             {weeklySessions.map((session, index) => {
               // Datum für URL formatieren (YYYY-MM-DD)
-              const sessionDate = session.date ? new Date(session.date).toISOString().split('T')[0] : '';
+              let sessionDate = '';
+              if (session.date) {
+                try {
+                  const dateObj = new Date(session.date);
+                  if (!isNaN(dateObj.getTime())) {
+                    sessionDate = dateObj.toISOString().split('T')[0];
+                  } else {
+                    // Fallback: Heute verwenden
+                    sessionDate = new Date().toISOString().split('T')[0];
+                  }
+                } catch (e) {
+                  sessionDate = new Date().toISOString().split('T')[0];
+                }
+              } else {
+                // Fallback: Heute verwenden wenn kein Datum vorhanden
+                sessionDate = new Date().toISOString().split('T')[0];
+              }
+              
+              const handleClick = () => {
+                console.log('Navigating to:', `/workout-session/${session.id}/${sessionDate}`);
+                navigate(`/workout-session/${session.id}/${sessionDate}`);
+              };
               
               return (
                 <div 
                   key={index} 
-                  onClick={() => navigate(`/workout-session/${session.id}/${sessionDate}`)}
+                  onClick={handleClick}
                   className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100 flex justify-between items-center transition-all hover:shadow-md active:scale-[0.98] cursor-pointer"
                 >
                   <div className="flex items-center gap-4">
