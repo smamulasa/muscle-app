@@ -1,5 +1,6 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import useWorkoutStore from './store/useWorkoutStore';
 
 // Wir importieren hier deine zwei Seiten (Views)
 import HomeView from './views/HomeView';
@@ -9,6 +10,20 @@ import ExerciseDetailView from './views/ExerciseDetailView';
 import WorkoutSessionDetailView from './views/WorkoutSessionDetailView';
 
 function App() {
+  const store = useWorkoutStore();
+  const storageType = import.meta.env.VITE_STORAGE_TYPE || 'local';
+  const init = store.init;
+  const initialized = store.initialized;
+
+  // Initialisiere Supabase Store beim App-Start (falls aktiv)
+  useEffect(() => {
+    if (storageType === 'supabase' && init && !initialized) {
+      init().catch(error => {
+        console.error('Fehler bei Supabase-Initialisierung:', error);
+      });
+    }
+  }, [storageType, init, initialized]);
+
   return (
     <BrowserRouter>
       {/* Dieser div-Container simuliert ein Handy-Display auf großen Bildschirmen 
