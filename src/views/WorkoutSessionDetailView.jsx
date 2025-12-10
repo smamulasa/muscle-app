@@ -112,12 +112,75 @@ const WorkoutSessionDetailView = () => {
     // Gesamt-Volumen berechnen
     const totalVolume = exercisesWithData.reduce((sum, ex) => sum + ex.totalVolume, 0);
 
+    // --- REKORD-PRÜFUNG: Vergleiche mit allen anderen Sessions dieses Workouts ---
+    let isVolumeRecord = false;
+    let isMaxWeightRecord = false;
+    
+    if (overallMaxWeight > 0 || totalVolume > 0) {
+      // Alle Sessions für dieses Workout durchgehen
+      const allWorkoutSessions = [];
+      
+      workout.exercises?.forEach(exercise => {
+        const exerciseHistory = history[exercise.id] || {};
+        Object.keys(exerciseHistory).forEach(sessionDate => {
+          if (sessionDate === date) return; // Aktuelle Session überspringen
+          
+          const sessionSets = exerciseHistory[sessionDate] || [];
+          let sessionMaxWeight = 0;
+          let sessionVolume = 0;
+          
+          sessionSets.forEach(set => {
+            if (set && set.weight && set.reps) {
+              const w = parseFloat(set.weight) || 0;
+              const r = parseFloat(set.reps) || 0;
+              if (w > sessionMaxWeight) sessionMaxWeight = w;
+              sessionVolume += (w * r);
+            }
+          });
+          
+          if (sessionMaxWeight > 0 || sessionVolume > 0) {
+            allWorkoutSessions.push({
+              date: sessionDate,
+              maxWeight: sessionMaxWeight,
+              volume: sessionVolume
+            });
+          }
+        });
+      });
+      
+      // Gesamt-Volumen und Max-Gewicht pro Session berechnen
+      const sessionTotals = {};
+      allWorkoutSessions.forEach(session => {
+        if (!sessionTotals[session.date]) {
+          sessionTotals[session.date] = { maxWeight: 0, volume: 0 };
+        }
+        if (session.maxWeight > sessionTotals[session.date].maxWeight) {
+          sessionTotals[session.date].maxWeight = session.maxWeight;
+        }
+        sessionTotals[session.date].volume += session.volume;
+      });
+      
+      // Höchste Werte aus allen Sessions finden
+      const allMaxWeights = Object.values(sessionTotals).map(s => s.maxWeight).filter(w => w > 0);
+      const allVolumes = Object.values(sessionTotals).map(s => s.volume).filter(v => v > 0);
+      
+      const highestMaxWeight = allMaxWeights.length > 0 ? Math.max(...allMaxWeights) : 0;
+      const highestVolume = allVolumes.length > 0 ? Math.max(...allVolumes) : 0;
+      
+      // Prüfen, ob aktuelle Session einen Rekord hat
+      isMaxWeightRecord = overallMaxWeight > highestMaxWeight;
+      isVolumeRecord = totalVolume > highestVolume;
+    }
+
     return {
       exercises: exercisesWithData,
       overallMaxWeight,
       totalVolume,
       date: new Date(date),
-      duration: sessionData.lastDuration || 0
+      duration: sessionData.lastDuration || 0,
+      isRecord: isMaxWeightRecord || isVolumeRecord,
+      isMaxWeightRecord,
+      isVolumeRecord
     };
   }, [workout, date, history, sessionData]);
 
@@ -206,6 +269,25 @@ const WorkoutSessionDetailView = () => {
       </div>
 
       <div className="p-6 space-y-6">
+        
+        {/* NEUER REKORD BADGE */}
+        {sessionDetails.isRecord && (
+          <div className="bg-gradient-to-r from-yellow-50 to-orange-50 border-2 border-yellow-300 rounded-2xl p-4 flex items-center gap-3 shadow-sm">
+            <div className="w-12 h-12 rounded-full bg-yellow-400 text-white flex items-center justify-center shrink-0">
+              <Trophy size={24} fill="currentColor" />
+            </div>
+            <div className="flex-1">
+              <p className="text-sm font-bold text-yellow-900">Neuer Rekord!</p>
+              <p className="text-xs text-yellow-700 mt-0.5">
+                {sessionDetails.isMaxWeightRecord && sessionDetails.isVolumeRecord 
+                  ? 'Höchstes Gewicht & Volumen'
+                  : sessionDetails.isMaxWeightRecord 
+                    ? 'Höchstes Gewicht'
+                    : 'Höchstes Volumen'}
+              </p>
+            </div>
+          </div>
+        )}
         
         {/* STATS CARDS */}
         <div className="grid grid-cols-2 gap-4">
