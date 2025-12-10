@@ -3,27 +3,24 @@ import { Check, Save } from 'lucide-react';
 import useWorkoutStore from '../store/useWorkoutStore';
 
 const ExerciseCard = ({ exercise }) => {
-  // 1. Notbremse
   if (!exercise) return null;
 
-  // 2. STABILER ZUGRIFF: Wir holen nur das History-Objekt.
-  // Das ändert sich nicht bei jedem Zugriff -> Keine Endlosschleife!
   const history = useWorkoutStore((state) => state.history);
   const logSet = useWorkoutStore((state) => state.logSet);
 
-  // 3. DATEN LOKAL BERECHNEN (Mit useMemo für Performance & Stabilität)
+  // BRANDING FARBEN
+  const BRAND_COLOR = "#453ACF";
+
   const { todayLog, previousLog } = useMemo(() => {
     if (!history || !exercise.id || !history[exercise.id]) {
       return { todayLog: [], previousLog: [] };
     }
-
     const exerciseHistory = history[exercise.id];
     const today = new Date().toISOString().split('T')[0];
     
-    // A) Daten von Heute
     const tLog = exerciseHistory[today] || [];
-
-    // B) Daten von Früher (Letzter Eintrag, der NICHT heute ist)
+    
+    // Letztes Training finden (nicht heute)
     const sortedDates = Object.keys(exerciseHistory)
       .filter(date => date !== today)
       .sort();
@@ -32,9 +29,8 @@ const ExerciseCard = ({ exercise }) => {
     const pLog = lastDate ? exerciseHistory[lastDate] : [];
 
     return { todayLog: tLog, previousLog: pLog };
-  }, [history, exercise.id]); // Berechnet nur neu, wenn sich History wirklich ändert
+  }, [history, exercise.id]);
   
-  // Sets vorbereiten
   const setsCount = exercise.sets || 3;
   const setsArray = Array.from({ length: setsCount }, (_, i) => i);
 
@@ -71,6 +67,7 @@ const ExerciseCard = ({ exercise }) => {
             onSave={logSet}
             defaultWeight={exercise.startWeight}
             defaultReps={exercise.startReps}
+            brandColor={BRAND_COLOR} // Farbe durchreichen
           />
         ))}
       </div>
@@ -79,29 +76,28 @@ const ExerciseCard = ({ exercise }) => {
 };
 
 // --- Die intelligente Zeile ---
-const SetRow = ({ index, exerciseId, todayData, prevData, onSave, defaultWeight, defaultReps }) => {
-  // LOGIK:
-  // Gewicht: Nimm Heute -> sonst Früher -> sonst Standard -> sonst leer
+const SetRow = ({ index, exerciseId, todayData, prevData, onSave, defaultWeight, defaultReps, brandColor }) => {
   const initialWeight = todayData?.weight || prevData?.weight || defaultWeight || '';
   const initialReps = todayData?.reps || prevData?.reps || defaultReps || '';
-  
-  // Status: NUR 'completed' wenn es wirklich HEUTE passiert ist
   const initialDone = todayData?.completed || false;
 
   const [weight, setWeight] = useState(initialWeight);
   const [reps, setReps] = useState(initialReps);
   const [done, setDone] = useState(initialDone);
 
-  // Update bei Datenänderung
+  // Wenn alte Daten vorhanden sind, zeige sie als Platzhalter oder Wert
+  const isPreviousData = !todayData && prevData; 
+
   useEffect(() => {
     if (todayData) { 
       setWeight(todayData.weight); 
       setReps(todayData.reps); 
       setDone(todayData.completed); 
     } else if (prevData) {
+      // Wir setzen die Werte vor, aber markieren es NICHT als erledigt
       setWeight(prevData.weight);
       setReps(prevData.reps);
-      setDone(false); // Alte Werte, aber NICHT abgehakt!
+      setDone(false);
     }
   }, [todayData, prevData]); 
 
@@ -112,22 +108,34 @@ const SetRow = ({ index, exerciseId, todayData, prevData, onSave, defaultWeight,
   };
 
   return (
-    <div className={`flex items-center gap-3 p-2 rounded-xl transition-all ${done ? 'bg-green-50 ring-1 ring-green-400/20' : 'bg-gray-50'}`}>
+    <div className={`flex items-center gap-3 p-2 rounded-xl transition-all ${done ? 'bg-[#453ACF]/10 ring-1 ring-[#453ACF]/20' : 'bg-gray-50'}`}>
       <span className="w-8 text-center font-bold text-gray-400 text-sm">{index + 1}</span>
       
-      <input 
-        type="number" placeholder="kg" value={weight} 
-        onChange={(e) => { setWeight(e.target.value); setDone(false); }} 
-        className="flex-1 w-full bg-white border-none rounded-lg py-2.5 text-center font-bold text-gray-900 focus:ring-2 focus:ring-indigo-500 shadow-sm outline-none" 
-      />
+      <div className="relative flex-1">
+          <input 
+            type="number" placeholder="kg" value={weight} 
+            onChange={(e) => { setWeight(e.target.value); setDone(false); }} 
+            className={`w-full bg-white border-none rounded-lg py-2.5 text-center font-bold text-gray-900 shadow-sm outline-none focus:ring-2 focus:ring-[${brandColor}]`} 
+            style={{ color: isPreviousData ? '#9CA3AF' : '#111827' }} // Grau wenn alt, Schwarz wenn neu
+            onFocus={(e) => e.target.style.color = '#111827'} // Schwarz beim Tippen
+          />
+          {/* Kleiner Hinweis, wenn es alte Daten sind */}
+          {isPreviousData && !done && (
+             <span className="absolute -top-2 right-1 text-[8px] bg-gray-200 text-gray-500 px-1 rounded">Last</span>
+          )}
+      </div>
       
       <input 
         type="number" placeholder="Rep" value={reps} 
         onChange={(e) => { setReps(e.target.value); setDone(false); }} 
-        className="flex-1 w-full bg-white border-none rounded-lg py-2.5 text-center font-bold text-gray-900 focus:ring-2 focus:ring-indigo-500 shadow-sm outline-none" 
+        className={`flex-1 w-full bg-white border-none rounded-lg py-2.5 text-center font-bold text-gray-900 shadow-sm outline-none focus:ring-2 focus:ring-[${brandColor}]`} 
       />
       
-      <button onClick={save} className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all active:scale-90 ${done ? 'bg-green-500 text-white shadow-lg shadow-green-200' : 'bg-gray-200 text-gray-400'}`}>
+      {/* Save Button mit Branding */}
+      <button 
+        onClick={save} 
+        className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all active:scale-90 ${done ? 'bg-[#453ACF] text-white shadow-lg shadow-indigo-200' : 'bg-gray-200 text-gray-400'}`}
+      >
         {done ? <Check size={18} strokeWidth={3} /> : <Save size={18} />}
       </button>
     </div>

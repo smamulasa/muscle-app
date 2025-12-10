@@ -1,65 +1,52 @@
-import { create } from 'zustand'
-import { persist, createJSONStorage } from 'zustand/middleware'
+import { create } from 'zustand';
+import { persist, createJSONStorage } from 'zustand/middleware';
 
 const useWorkoutStore = create(
   persist(
     (set, get) => ({
-      history: {}, 
-      sessions: [],
+      // --- DATEN ---
+      history: {}, // Struktur: { 'bench_press': { '2023-12-09': [{weight: 80, reps: 10}, ...] } }
+      sessions: [], // Liste der beendeten Workouts für die Startseite
 
-      logSet: (exerciseId, setIndex, weight, reps) => set((state) => {
-        const today = new Date().toISOString().split('T')[0];
-        const exerciseHistory = state.history[exerciseId] || {};
-        const todaysLog = exerciseHistory[today] || [];
+      // --- AKTIONEN ---
+      
+      // 1. Einen einzelnen Satz speichern (passiert live beim Tippen auf den Haken)
+      logSet: (exerciseId, setIndex, weight, reps) => {
+        const today = new Date().toISOString().split('T')[0]; // "2023-12-09"
         
-        const newLog = [...todaysLog];
-        newLog[setIndex] = { weight, reps, completed: true };
+        set((state) => {
+          const newHistory = { ...state.history };
+          
+          // Sicherstellen, dass die Struktur existiert
+          if (!newHistory[exerciseId]) newHistory[exerciseId] = {};
+          if (!newHistory[exerciseId][today]) newHistory[exerciseId][today] = [];
+          
+          // Den Satz speichern
+          newHistory[exerciseId][today][setIndex] = {
+            weight: parseFloat(weight),
+            reps: parseFloat(reps),
+            completed: true
+          };
 
-        return {
-          history: {
-            ...state.history,
-            [exerciseId]: { ...exerciseHistory, [today]: newLog }
-          }
-        };
-      }),
-
-      finishWorkout: (workoutId, title, duration) => set((state) => {
-        const newSession = {
-          workoutId, title, duration, date: new Date().toISOString(),
-        };
-        return { sessions: [newSession, ...state.sessions] };
-      }),
-
-      // Daten von HEUTE abrufen (mit Haken)
-      getTodayLog: (exerciseId) => {
-        const today = new Date().toISOString().split('T')[0];
-        return get().history[exerciseId]?.[today] || [];
+          return { history: newHistory };
+        });
       },
 
-      // NEU: Daten vom LETZTEN MAL abrufen (ohne Heute zu beachten)
-      getPreviousLog: (exerciseId) => {
-        const history = get().history[exerciseId];
-        if (!history) return [];
-        
-        const today = new Date().toISOString().split('T')[0];
-        
-        // Alle Daten außer heute suchen und sortieren
-        const previousDates = Object.keys(history)
-          .filter(date => date !== today) // Heute ignorieren
-          .sort();
-        
-        if (previousDates.length === 0) return [];
-        
-        // Das letzte Datum nehmen
-        const lastDate = previousDates[previousDates.length - 1];
-        return history[lastDate] || [];
+      // 2. Ein ganzes Workout abschließen (für die Statistik auf der Startseite)
+      finishWorkout: (workoutId, title, duration, date) => {
+        set((state) => ({
+          sessions: [
+            ...state.sessions,
+            { id: workoutId, title, duration, date }
+          ]
+        }));
       }
     }),
     {
-      name: 'muscle-app-storage',
-      storage: createJSONStorage(() => localStorage),
+      name: 'muscle-app-storage', // Name im LocalStorage
+      storage: createJSONStorage(() => localStorage), // Explizit LocalStorage nutzen
     }
   )
-)
+);
 
 export default useWorkoutStore;

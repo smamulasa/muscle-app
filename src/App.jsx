@@ -4,6 +4,8 @@ import { BrowserRouter, Routes, Route } from 'react-router-dom';
 // Wir importieren hier deine zwei Seiten (Views)
 import HomeView from './views/HomeView';
 import WorkoutView from './views/WorkoutView';
+import StatsView from './views/StatsView';
+import ExerciseDetailView from './views/ExerciseDetailView';
 
 function App() {
   return (
@@ -19,6 +21,9 @@ function App() {
 
           {/* Wenn der Pfad "/workout/push" ist -> Zeige WorkoutView */}
           <Route path="/workout/:id" element={<WorkoutView />} />
+
+          <Route path="/stats" element={<StatsView />} />
+          <Route path="/stats/exercise/:id" element={<ExerciseDetailView />} />
         </Routes>
 
       </div>
