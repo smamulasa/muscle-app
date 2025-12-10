@@ -157,7 +157,10 @@ const SetRow = ({ index, exerciseId, todayData, prevData, onSave, onDelete, defa
       
       <div className="relative flex-1">
           <input 
-            type="number" placeholder="kg" value={weight} 
+            type="number" 
+            inputMode="decimal"
+            placeholder="kg" 
+            value={weight} 
             onChange={(e) => { setWeight(e.target.value); setDone(false); }} 
             className={`w-full bg-white border-none rounded-lg py-2.5 text-center font-bold text-gray-900 shadow-sm outline-none focus:ring-2 focus:ring-[${brandColor}]`} 
             style={{ color: isPreviousData ? '#9CA3AF' : '#111827' }} // Grau wenn alt, Schwarz wenn neu
@@ -170,7 +173,10 @@ const SetRow = ({ index, exerciseId, todayData, prevData, onSave, onDelete, defa
       </div>
       
       <input 
-        type="number" placeholder="Rep" value={reps} 
+        type="number" 
+        inputMode="numeric"
+        placeholder="Rep" 
+        value={reps} 
         onChange={(e) => { setReps(e.target.value); setDone(false); }} 
         className={`flex-1 w-full bg-white border-none rounded-lg py-2.5 text-center font-bold text-gray-900 shadow-sm outline-none focus:ring-2 focus:ring-[${brandColor}]`} 
       />
