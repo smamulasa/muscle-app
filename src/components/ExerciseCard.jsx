@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Check, Save } from 'lucide-react';
+import { Check, Save, Plus, Trash2 } from 'lucide-react';
 import useWorkoutStore from '../store/useWorkoutStore';
 
 const ExerciseCard = ({ exercise }) => {
@@ -7,6 +7,7 @@ const ExerciseCard = ({ exercise }) => {
 
   const history = useWorkoutStore((state) => state.history);
   const logSet = useWorkoutStore((state) => state.logSet);
+  const deleteSet = useWorkoutStore((state) => state.deleteSet);
 
   // BRANDING FARBEN
   const BRAND_COLOR = "#453ACF";
@@ -31,8 +32,32 @@ const ExerciseCard = ({ exercise }) => {
     return { todayLog: tLog, previousLog: pLog };
   }, [history, exercise.id]);
   
-  const setsCount = exercise.sets || 3;
+  // Dynamische Satz-Anzahl: Start mit exercise.sets, aber erweitern wenn heute bereits mehr Sätze vorhanden
+  const defaultSetsCount = exercise.sets || 3;
+  const currentSetsCount = Math.max(defaultSetsCount, todayLog.length || defaultSetsCount);
+  const [setsCount, setSetsCount] = useState(currentSetsCount);
+  
+  // Aktualisiere setsCount wenn todayLog sich ändert (z.B. durch Löschen)
+  useEffect(() => {
+    const newCount = Math.max(defaultSetsCount, todayLog.length || defaultSetsCount);
+    setSetsCount(newCount);
+  }, [todayLog.length, defaultSetsCount]);
+  
   const setsArray = Array.from({ length: setsCount }, (_, i) => i);
+
+  const handleAddSet = () => {
+    setSetsCount(prev => prev + 1);
+  };
+
+  const handleDeleteSet = (index) => {
+    if (setsCount <= 1) return; // Mindestens ein Satz muss bleiben
+    
+    // Satz aus dem Store löschen
+    deleteSet(exercise.id, index);
+    
+    // Lokale Anzahl reduzieren
+    setSetsCount(prev => Math.max(1, prev - 1));
+  };
 
   return (
     <div className="bg-white rounded-3xl p-5 shadow-sm border border-gray-100 mb-6">
@@ -74,18 +99,28 @@ const ExerciseCard = ({ exercise }) => {
             todayData={todayLog[i]}       
             prevData={previousLog[i]}     
             onSave={logSet}
+            onDelete={setsCount > 1 ? () => handleDeleteSet(i) : null}
             defaultWeight={exercise.startWeight}
             defaultReps={exercise.startReps}
             brandColor={BRAND_COLOR} // Farbe durchreichen
           />
         ))}
+        
+        {/* Button zum Hinzufügen eines neuen Satzes */}
+        <button
+          onClick={handleAddSet}
+          className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl bg-gray-50 hover:bg-gray-100 text-gray-600 font-medium text-sm transition-colors active:scale-95"
+        >
+          <Plus size={16} />
+          Satz hinzufügen
+        </button>
       </div>
     </div>
   );
 };
 
 // --- Die intelligente Zeile ---
-const SetRow = ({ index, exerciseId, todayData, prevData, onSave, defaultWeight, defaultReps, brandColor }) => {
+const SetRow = ({ index, exerciseId, todayData, prevData, onSave, onDelete, defaultWeight, defaultReps, brandColor }) => {
   const initialWeight = todayData?.weight || prevData?.weight || defaultWeight || '';
   const initialReps = todayData?.reps || prevData?.reps || defaultReps || '';
   const initialDone = todayData?.completed || false;
@@ -117,7 +152,7 @@ const SetRow = ({ index, exerciseId, todayData, prevData, onSave, defaultWeight,
   };
 
   return (
-    <div className={`flex items-center gap-3 p-2 rounded-xl transition-all ${done ? 'bg-[#453ACF]/10 ring-1 ring-[#453ACF]/20' : 'bg-gray-50'}`}>
+    <div className={`flex items-center gap-2 p-2 rounded-xl transition-all ${done ? 'bg-[#453ACF]/10 ring-1 ring-[#453ACF]/20' : 'bg-gray-50'}`}>
       <span className="w-8 text-center font-bold text-gray-400 text-sm">{index + 1}</span>
       
       <div className="relative flex-1">
@@ -147,6 +182,17 @@ const SetRow = ({ index, exerciseId, todayData, prevData, onSave, defaultWeight,
       >
         {done ? <Check size={18} strokeWidth={3} /> : <Save size={18} />}
       </button>
+      
+      {/* Delete Button (nur anzeigen wenn onDelete vorhanden) */}
+      {onDelete && (
+        <button
+          onClick={onDelete}
+          className="w-9 h-9 rounded-lg flex items-center justify-center bg-red-50 hover:bg-red-100 text-red-500 transition-all active:scale-90"
+          title="Satz löschen"
+        >
+          <Trash2 size={16} />
+        </button>
+      )}
     </div>
   );
 };

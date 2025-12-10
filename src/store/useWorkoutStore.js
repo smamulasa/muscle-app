@@ -40,6 +40,36 @@ const useWorkoutStore = create(
             { id: workoutId, title, duration, date }
           ]
         }));
+      },
+
+      // 3. Einen Satz löschen
+      deleteSet: (exerciseId, setIndex) => {
+        const today = new Date().toISOString().split('T')[0];
+        
+        set((state) => {
+          const newHistory = { ...state.history };
+          
+          if (!newHistory[exerciseId] || !newHistory[exerciseId][today]) {
+            return state;
+          }
+          
+          // Array kopieren und Satz am Index entfernen
+          const daySets = [...newHistory[exerciseId][today]];
+          daySets.splice(setIndex, 1);
+          
+          // Neues Array aufbauen: Alle vorhandenen Sätze sequenziell neu indizieren
+          // Das stellt sicher, dass nach dem Löschen keine Lücken entstehen
+          const cleanedSets = [];
+          daySets.forEach((set) => {
+            if (set !== null && set !== undefined) {
+              cleanedSets.push(set);
+            }
+          });
+          
+          newHistory[exerciseId][today] = cleanedSets;
+          
+          return { history: newHistory };
+        });
       }
     }),
     {
