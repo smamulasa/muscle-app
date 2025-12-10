@@ -214,23 +214,32 @@ const HomeView = () => {
         
         {weeklySessions.length > 0 ? (
           <div className="space-y-4">
-            {weeklySessions.map((session, index) => (
-              <div key={index} className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100 flex justify-between items-center transition-all hover:shadow-md">
-                <div className="flex items-center gap-4">
-                  <div className="w-12 h-12 rounded-full bg-green-100 text-green-600 flex items-center justify-center shrink-0">
-                    <CheckCircle2 size={24} />
-                  </div>
-                  <div>
-                    <h4 className="font-bold text-gray-900">{session.title}</h4>
-                    <p className="text-xs text-gray-400 mt-1 flex items-center gap-2">
-                      <span>{formatDate(session.date)}</span>
-                      <span className="w-1 h-1 bg-gray-300 rounded-full"></span>
-                      <span className="flex items-center gap-1"><Clock size={10} /> {formatDuration(session.duration)}</span>
-                    </p>
+            {weeklySessions.map((session, index) => {
+              // Datum für URL formatieren (YYYY-MM-DD)
+              const sessionDate = session.date ? new Date(session.date).toISOString().split('T')[0] : '';
+              
+              return (
+                <div 
+                  key={index} 
+                  onClick={() => navigate(`/workout-session/${session.id}/${sessionDate}`)}
+                  className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100 flex justify-between items-center transition-all hover:shadow-md active:scale-[0.98] cursor-pointer"
+                >
+                  <div className="flex items-center gap-4">
+                    <div className="w-12 h-12 rounded-full bg-green-100 text-green-600 flex items-center justify-center shrink-0">
+                      <CheckCircle2 size={24} />
+                    </div>
+                    <div>
+                      <h4 className="font-bold text-gray-900">{session.title}</h4>
+                      <p className="text-xs text-gray-400 mt-1 flex items-center gap-2">
+                        <span>{formatDate(session.date)}</span>
+                        <span className="w-1 h-1 bg-gray-300 rounded-full"></span>
+                        <span className="flex items-center gap-1"><Clock size={10} /> {formatDuration(session.duration)}</span>
+                      </p>
+                    </div>
                   </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         ) : (
           <div className="bg-white rounded-3xl p-8 text-center border border-gray-100 shadow-sm border-dashed">

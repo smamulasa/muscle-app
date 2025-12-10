@@ -6,6 +6,7 @@ import HomeView from './views/HomeView';
 import WorkoutView from './views/WorkoutView';
 import StatsView from './views/StatsView';
 import ExerciseDetailView from './views/ExerciseDetailView';
+import WorkoutSessionDetailView from './views/WorkoutSessionDetailView';
 
 function App() {
   return (
@@ -24,6 +25,7 @@ function App() {
 
           <Route path="/stats" element={<StatsView />} />
           <Route path="/stats/exercise/:id" element={<ExerciseDetailView />} />
+          <Route path="/workout-session/:workoutId/:date" element={<WorkoutSessionDetailView />} />
         </Routes>
 
       </div>
