@@ -5,6 +5,7 @@ import { ArrowLeft, CheckCircle, Play } from 'lucide-react';
 import ExerciseCard from '../components/ExerciseCard';
 import { WorkoutTimer } from '../components/WorkoutTimer';
 import ConfirmModal from '../components/ConfirmModal'; // Hier importieren wir das Modal wieder
+import BottomNav from '../components/BottomNav';
 
 const WorkoutView = () => {
   const { id } = useParams();
@@ -148,6 +149,9 @@ const WorkoutView = () => {
           </button>
         </div>
       )}
+
+      {/* --- BOTTOM NAV (nur wenn kein Workout läuft) --- */}
+      {!isWorkoutStarted && <BottomNav />}
 
     </div>
   );

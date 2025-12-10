@@ -2,6 +2,7 @@ import React, { useEffect, useState, useMemo } from 'react';
 import { Play, Home, List, Activity, History, User, CheckCircle2, Clock } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { workouts } from '../data/workouts'; // WICHTIG: Import für dynamische Daten
+import BottomNav from '../components/BottomNav';
 
 const HomeView = () => {
   const navigate = useNavigate();
@@ -107,15 +108,19 @@ const HomeView = () => {
                   src={recommendedWorkout.exercises[0].image} // Nimmt Bild der ersten Übung als Cover
                   alt="Workout Cover" 
                   className="w-full h-full object-cover opacity-90 transition-transform duration-700 group-hover:scale-105"
+                  onError={(e) => {
+                    e.target.style.display = 'none';
+                    e.target.nextSibling.style.display = 'flex';
+                  }}
                 />
-             ) : (
-                // Fallback Bild
-                <img 
-                  src="https://images.unsplash.com/photo-1581009146145-b5ef050c2e1e?q=80&w=2670&auto=format&fit=crop" 
-                  alt="Workout Cover" 
-                  className="w-full h-full object-cover opacity-90 transition-transform duration-700 group-hover:scale-105"
-                />
-             )}
+             ) : null}
+             {/* Fallback Platzhalter */}
+             <div 
+               className="w-full h-full flex items-center justify-center text-6xl bg-gradient-to-br from-[#453ACF]/30 to-[#453ACF]/10"
+               style={{ display: recommendedWorkout.exercises && recommendedWorkout.exercises[0]?.image ? 'none' : 'flex' }}
+             >
+               💪
+             </div>
              
              <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent"></div>
 
@@ -239,31 +244,11 @@ const HomeView = () => {
       </section>
 
       {/* --- BOTTOM NAV --- */}
-      <div className="fixed bottom-6 left-1/2 -translate-x-1/2 w-[calc(100%-3rem)] max-w-[25rem] bg-white rounded-full shadow-2xl shadow-gray-200 border border-gray-100 p-2 flex justify-between items-center z-50">
-        <NavButton icon={Home} active />
-        <NavButton icon={List} />
-        <NavButton 
-          icon={Activity} 
-          onClick={() => navigate('/stats')} 
-        />
-        <NavButton icon={History} />
-        <NavButton icon={User} />
-      </div>
+      <BottomNav />
 
     </div>
   );
 };
-
-// --- HELPER KOMPONENTEN ---
-
-const NavButton = ({ icon: Icon, active, onClick }) => (
-  <button 
-    onClick={onClick}
-    className={`p-3 rounded-full flex flex-col items-center gap-1 transition-all ${active ? 'bg-gray-100 text-gray-900' : 'text-gray-400 hover:text-gray-600'}`}
-  >
-    <Icon size={24} strokeWidth={active ? 2.5 : 2} />
-  </button>
-);
 
 const SplitCard = ({ title, subtitle, color, icon, lastDuration, onClick }) => {
   const colors = {

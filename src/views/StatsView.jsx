@@ -4,6 +4,7 @@ import { ArrowLeft, Trophy, Search, Dumbbell, ChevronRight, RefreshCw } from 'lu
 import useWorkoutStore from '../store/useWorkoutStore';
 import { workouts } from '../data/workouts';
 import { AreaChart, Area, ResponsiveContainer, YAxis } from 'recharts';
+import BottomNav from '../components/BottomNav';
 
 const StatsView = () => {
   const navigate = useNavigate();
@@ -116,6 +117,7 @@ const StatsView = () => {
 
   return (
     <div className="bg-gray-50 min-h-screen pb-32 font-sans">
+      <BottomNav />
       
       {/* HEADER */}
       <div className="sticky top-0 bg-white/90 backdrop-blur-md z-20 px-6 py-4 border-b border-gray-100">

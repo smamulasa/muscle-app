@@ -41,10 +41,19 @@ const ExerciseCard = ({ exercise }) => {
       <div className="flex gap-4 mb-6 items-center">
         <div className="w-16 h-16 rounded-2xl bg-gray-100 overflow-hidden flex-shrink-0 border border-gray-100">
            {exercise.image ? (
-             <img src={exercise.image} alt={exercise.name} className="w-full h-full object-cover" />
-           ) : (
-             <div className="w-full h-full flex items-center justify-center text-2xl">💪</div>
-           )}
+             <img 
+               src={exercise.image} 
+               alt={exercise.name} 
+               className="w-full h-full object-cover"
+               onError={(e) => {
+                 e.target.style.display = 'none';
+                 e.target.nextSibling.style.display = 'flex';
+               }}
+             />
+           ) : null}
+           <div className="w-full h-full flex items-center justify-center text-2xl bg-gradient-to-br from-[#453ACF]/20 to-[#453ACF]/5" style={{ display: exercise.image ? 'none' : 'flex' }}>
+             💪
+           </div>
         </div>
         <div>
           <h3 className="font-bold text-lg text-gray-900 leading-tight">{exercise.name}</h3>
