@@ -1,11 +1,13 @@
 import React, { useEffect, useState, useMemo } from 'react';
-import { Play, Home, List, Activity, History, User, CheckCircle2, Clock } from 'lucide-react';
+import { Play, Home, List, Activity, History, User, CheckCircle2, Clock, Trophy, TrendingUp, TrendingDown } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { workouts } from '../data/workouts'; // WICHTIG: Import für dynamische Daten
 import BottomNav from '../components/BottomNav';
+import useWorkoutStore from '../store/useWorkoutStore';
 
 const HomeView = () => {
   const navigate = useNavigate();
+  const workoutHistory = useWorkoutStore((state) => state.history);
   
   // --- STATE ---
   const [history, setHistory] = useState({});
@@ -16,17 +18,99 @@ const HomeView = () => {
     const storedHistory = JSON.parse(localStorage.getItem('workoutHistory') || '{}');
     setHistory(storedHistory);
 
-    const historyArray = Object.entries(storedHistory).map(([key, data]) => ({
-      id: key,
-      title: key.charAt(0).toUpperCase() + key.slice(1) + " Workout", 
-      date: data.lastDate,
-      duration: data.lastDuration,
-    }));
+    const historyArray = Object.entries(storedHistory).map(([key, data]) => {
+      const workout = workouts[key];
+      const sessionDate = data.lastDate ? new Date(data.lastDate).toISOString().split('T')[0] : '';
+      
+      // Berechne Max-Gewicht für diese Session
+      let maxWeight = 0;
+      let totalVolume = 0;
+      
+      if (workout && workout.exercises && sessionDate) {
+        workout.exercises.forEach(exercise => {
+          const exerciseHistory = workoutHistory[exercise.id] || {};
+          const daySets = exerciseHistory[sessionDate] || [];
+          
+          daySets.forEach(set => {
+            if (set && set.weight) {
+              const weight = parseFloat(set.weight) || 0;
+              const reps = parseFloat(set.reps) || 0;
+              if (weight > maxWeight) maxWeight = weight;
+              totalVolume += (weight * reps);
+            }
+          });
+        });
+      }
+      
+      return {
+        id: key,
+        title: key.charAt(0).toUpperCase() + key.slice(1) + " Workout", 
+        date: data.lastDate,
+        duration: data.lastDuration,
+        maxWeight,
+        totalVolume
+      };
+    });
 
     // Sortieren: Neuestes zuerst (für die Logik "Was war zuletzt?")
     historyArray.sort((a, b) => new Date(b.date) - new Date(a.date));
-    setRecentSessions(historyArray);
-  }, []);
+    
+    // Berechne Rekorde und Vergleiche
+    const sessionsWithStats = historyArray.map((session, index) => {
+      const workout = workouts[session.id];
+      
+      // Prüfe, ob es ein Rekord ist (vergleiche mit allen anderen Sessions dieses Workouts)
+      let isRecord = false;
+      let isMaxWeightRecord = false;
+      let isVolumeRecord = false;
+      
+      if (session.maxWeight > 0 || session.totalVolume > 0) {
+        // Alle anderen Sessions für dieses Workout finden
+        const otherSessions = historyArray.filter(s => 
+          s.id === session.id && s.date !== session.date
+        );
+        
+        const allMaxWeights = otherSessions.map(s => s.maxWeight).filter(w => w > 0);
+        const allVolumes = otherSessions.map(s => s.totalVolume).filter(v => v > 0);
+        
+        const highestMaxWeight = allMaxWeights.length > 0 ? Math.max(...allMaxWeights) : 0;
+        const highestVolume = allVolumes.length > 0 ? Math.max(...allVolumes) : 0;
+        
+        isMaxWeightRecord = session.maxWeight > highestMaxWeight;
+        isVolumeRecord = session.totalVolume > highestVolume;
+        isRecord = isMaxWeightRecord || isVolumeRecord;
+      }
+      
+      // Vergleich zum letzten Mal (vorherige Session desselben Workouts)
+      let comparisonToLast = null;
+      const previousSession = historyArray.find(s => 
+        s.id === session.id && new Date(s.date) < new Date(session.date)
+      );
+      
+      if (previousSession && session.maxWeight > 0 && previousSession.maxWeight > 0) {
+        const diff = session.maxWeight - previousSession.maxWeight;
+        const percentDiff = previousSession.maxWeight > 0 
+          ? ((diff / previousSession.maxWeight) * 100) 
+          : 0;
+        comparisonToLast = {
+          absolute: diff,
+          percent: percentDiff,
+          isPositive: diff > 0,
+          isNegative: diff < 0
+        };
+      }
+      
+      return {
+        ...session,
+        isRecord,
+        isMaxWeightRecord,
+        isVolumeRecord,
+        comparisonToLast
+      };
+    });
+    
+    setRecentSessions(sessionsWithStats);
+  }, [workoutHistory]);
 
   // --- LOGIK: SMART RECOMMENDATION (NEXT UP) ---
   const nextWorkoutId = useMemo(() => {
@@ -243,19 +327,53 @@ const HomeView = () => {
                 <div 
                   key={index} 
                   onClick={handleClick}
-                  className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100 flex justify-between items-center transition-all hover:shadow-md active:scale-[0.98] cursor-pointer"
+                  className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100 transition-all hover:shadow-md active:scale-[0.98] cursor-pointer"
                 >
-                  <div className="flex items-center gap-4">
-                    <div className="w-12 h-12 rounded-full bg-green-100 text-green-600 flex items-center justify-center shrink-0">
-                      <CheckCircle2 size={24} />
-                    </div>
-                    <div>
-                      <h4 className="font-bold text-gray-900">{session.title}</h4>
-                      <p className="text-xs text-gray-400 mt-1 flex items-center gap-2">
-                        <span>{formatDate(session.date)}</span>
-                        <span className="w-1 h-1 bg-gray-300 rounded-full"></span>
-                        <span className="flex items-center gap-1"><Clock size={10} /> {formatDuration(session.duration)}</span>
-                      </p>
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="flex items-center gap-4 flex-1">
+                      <div className="w-12 h-12 rounded-full bg-green-100 text-green-600 flex items-center justify-center shrink-0">
+                        <CheckCircle2 size={24} />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-1">
+                          <h4 className="font-bold text-gray-900">{session.title}</h4>
+                          {session.isRecord && (
+                            <span className="bg-yellow-100 text-yellow-700 text-[10px] font-bold px-1.5 py-0.5 rounded flex items-center gap-1">
+                              <Trophy size={10} fill="currentColor" />
+                              Rekord
+                            </span>
+                          )}
+                        </div>
+                        <div className="flex flex-wrap items-center gap-2 text-xs text-gray-400">
+                          <span>{formatDate(session.date)}</span>
+                          <span className="w-1 h-1 bg-gray-300 rounded-full"></span>
+                          <span className="flex items-center gap-1">
+                            <Clock size={10} /> {formatDuration(session.duration)}
+                          </span>
+                          {session.maxWeight > 0 && (
+                            <>
+                              <span className="w-1 h-1 bg-gray-300 rounded-full"></span>
+                              <span className="font-medium text-gray-600">Max: {session.maxWeight} kg</span>
+                            </>
+                          )}
+                        </div>
+                        {/* Vergleich zum letzten Mal */}
+                        {session.comparisonToLast && (
+                          <div className="mt-2 flex items-center gap-2">
+                            {session.comparisonToLast.isPositive ? (
+                              <span className="text-[10px] font-bold text-green-600 flex items-center gap-1 bg-green-50 px-2 py-0.5 rounded">
+                                <TrendingUp size={10} />
+                                +{session.comparisonToLast.absolute.toFixed(1)} kg (+{session.comparisonToLast.percent.toFixed(1)}%)
+                              </span>
+                            ) : session.comparisonToLast.isNegative ? (
+                              <span className="text-[10px] font-bold text-red-600 flex items-center gap-1 bg-red-50 px-2 py-0.5 rounded">
+                                <TrendingDown size={10} />
+                                {session.comparisonToLast.absolute.toFixed(1)} kg ({session.comparisonToLast.percent.toFixed(1)}%)
+                              </span>
+                            ) : null}
+                          </div>
+                        )}
+                      </div>
                     </div>
                   </div>
                 </div>
