@@ -35,14 +35,23 @@ function App() {
   }, [storageType, authInit, authStore.isLoading]);
 
   // Initialisiere Supabase Store beim App-Start (falls aktiv und User eingeloggt)
+  // WICHTIG: Store prüft selbst, ob User gewechselt hat und lädt Daten neu
   useEffect(() => {
     const user = authStore.user;
-    if (storageType === 'supabase' && init && !initialized && user) {
+    
+    if (storageType === 'supabase' && init && user && !authStore.isLoading) {
+      // init() prüft selbst, ob User gewechselt hat
       init().catch(error => {
         console.error('Fehler bei Supabase-Initialisierung:', error);
       });
+    } else if (storageType === 'supabase' && !user && initialized && !authStore.isLoading) {
+      // User hat sich ausgeloggt - Store zurücksetzen
+      console.log('🔄 User ausgeloggt - setze Store zurück');
+      if (store.reset) {
+        store.reset();
+      }
     }
-  }, [storageType, init, initialized, authStore.user]);
+  }, [storageType, init, initialized, authStore.user, authStore.isLoading]);
 
   return (
     <BrowserRouter>

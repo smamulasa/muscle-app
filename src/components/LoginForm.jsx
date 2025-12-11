@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Mail, Lock, LogIn, UserPlus, AlertCircle } from 'lucide-react';
 import useAuthStore from '../store/useAuthStore';
 
@@ -6,6 +7,7 @@ const LoginForm = ({ onSwitchToRegister }) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const navigate = useNavigate();
   
   const signIn = useAuthStore((state) => state.signIn);
   const error = useAuthStore((state) => state.error);
@@ -18,10 +20,11 @@ const LoginForm = ({ onSwitchToRegister }) => {
     
     setIsLoading(false);
     
-    if (!result.success) {
-      // Error wird im Store gesetzt und angezeigt
-      return;
+    if (result.success) {
+      // Weiterleitung zur Home-Seite nach erfolgreichem Login
+      navigate('/');
     }
+    // Error wird im Store gesetzt und angezeigt
   };
 
   return (
@@ -44,7 +47,7 @@ const LoginForm = ({ onSwitchToRegister }) => {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
-                className="w-full pl-10 pr-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-[#453ACF] focus:border-transparent outline-none transition-all"
+                className="w-full pl-10 pr-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-[#453ACF] focus:border-transparent outline-none transition-all text-gray-900 placeholder:text-gray-400"
                 placeholder="deine@email.de"
               />
             </div>
@@ -64,7 +67,7 @@ const LoginForm = ({ onSwitchToRegister }) => {
                 onChange={(e) => setPassword(e.target.value)}
                 required
                 minLength={6}
-                className="w-full pl-10 pr-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-[#453ACF] focus:border-transparent outline-none transition-all"
+                className="w-full pl-10 pr-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-[#453ACF] focus:border-transparent outline-none transition-all text-gray-900 placeholder:text-gray-400"
                 placeholder="••••••••"
               />
             </div>

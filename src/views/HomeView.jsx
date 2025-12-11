@@ -9,6 +9,7 @@ import useAuthStore from '../store/useAuthStore';
 const HomeView = () => {
   const navigate = useNavigate();
   const workoutHistory = useWorkoutStore((state) => state.history);
+  const sessions = useWorkoutStore((state) => state.sessions); // Sessions aus Store
   const storageType = import.meta.env.VITE_STORAGE_TYPE || 'local';
   const user = useAuthStore((state) => state.user);
   const signOut = useAuthStore((state) => state.signOut);
@@ -19,10 +20,80 @@ const HomeView = () => {
 
   // --- 1. DATEN LADEN ---
   useEffect(() => {
-    const storedHistory = JSON.parse(localStorage.getItem('workoutHistory') || '{}');
-    setHistory(storedHistory);
+    // Bei Supabase: Verwende Sessions aus Store, sonst LocalStorage
+    if (storageType === 'supabase') {
+      // Verwende Sessions aus Supabase Store
+      console.log('📊 HomeView: Verwende Sessions aus Supabase Store:', sessions.length);
+      
+      // Erstelle history-ähnliche Struktur aus Sessions
+      const historyFromSessions = {};
+      sessions.forEach(session => {
+        if (!historyFromSessions[session.id]) {
+          historyFromSessions[session.id] = {
+            lastDate: session.date,
+            lastDuration: session.duration
+          };
+        } else {
+          // Nimm das neueste Datum
+          const existingDate = new Date(historyFromSessions[session.id].lastDate);
+          const sessionDate = new Date(session.date);
+          if (sessionDate > existingDate) {
+            historyFromSessions[session.id] = {
+              lastDate: session.date,
+              lastDuration: session.duration
+            };
+          }
+        }
+      });
+      
+      setHistory(historyFromSessions);
+    } else {
+      // LocalStorage-Modus: Verwende LocalStorage
+      const storedHistory = JSON.parse(localStorage.getItem('workoutHistory') || '{}');
+      setHistory(storedHistory);
+    }
 
-    const historyArray = Object.entries(storedHistory).map(([key, data]) => {
+    // Erstelle Sessions-Array aus history oder direkt aus Sessions
+    let historyArray = [];
+    
+    if (storageType === 'supabase') {
+      // Verwende Sessions direkt aus Store
+      historyArray = sessions.map(session => {
+        const workout = workouts[session.id];
+        const sessionDate = session.date ? new Date(session.date).toISOString().split('T')[0] : '';
+        
+        // Berechne Max-Gewicht für diese Session
+        let maxWeight = 0;
+        let totalVolume = 0;
+        
+        if (workout && workout.exercises && sessionDate) {
+          workout.exercises.forEach(exercise => {
+            const exerciseHistory = workoutHistory[exercise.id] || {};
+            const daySets = exerciseHistory[sessionDate] || [];
+            
+            daySets.forEach(set => {
+              if (set && set.weight) {
+                const weight = parseFloat(set.weight) || 0;
+                const reps = parseFloat(set.reps) || 0;
+                if (weight > maxWeight) maxWeight = weight;
+                totalVolume += (weight * reps);
+              }
+            });
+          });
+        }
+        
+        return {
+          id: session.id,
+          title: session.title || (session.id.charAt(0).toUpperCase() + session.id.slice(1) + " Workout"),
+          date: session.date,
+          duration: session.duration,
+          maxWeight,
+          totalVolume
+        };
+      });
+    } else {
+      // LocalStorage-Modus: Verwende storedHistory
+      historyArray = Object.entries(history).map(([key, data]) => {
       const workout = workouts[key];
       const sessionDate = data.lastDate ? new Date(data.lastDate).toISOString().split('T')[0] : '';
       
@@ -54,7 +125,8 @@ const HomeView = () => {
         maxWeight,
         totalVolume
       };
-    });
+      });
+    }
 
     // Sortieren: Neuestes zuerst (für die Logik "Was war zuletzt?")
     historyArray.sort((a, b) => new Date(b.date) - new Date(a.date));
@@ -114,7 +186,7 @@ const HomeView = () => {
     });
     
     setRecentSessions(sessionsWithStats);
-  }, [workoutHistory]);
+  }, [workoutHistory, sessions, storageType]); // Abhängigkeiten: workoutHistory, sessions, storageType
 
   // --- LOGIK: SMART RECOMMENDATION (NEXT UP) ---
   const nextWorkoutId = useMemo(() => {

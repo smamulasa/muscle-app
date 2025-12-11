@@ -9,6 +9,9 @@ import BottomNav from '../components/BottomNav';
 const StatsView = () => {
   const navigate = useNavigate();
   const history = useWorkoutStore((state) => state.history);
+  const loadHistory = useWorkoutStore((state) => state.loadHistory);
+  const initialized = useWorkoutStore((state) => state.initialized);
+  const storageType = import.meta.env.VITE_STORAGE_TYPE || 'local';
   const exerciseIds = Object.keys(history);
   const [searchTerm, setSearchTerm] = useState('');
 
@@ -18,6 +21,16 @@ const StatsView = () => {
     const timer = setTimeout(() => setIsReady(true), 500); 
     return () => clearTimeout(timer);
   }, []);
+
+  // --- HISTORY NEU LADEN BEI SUPABASE ---
+  useEffect(() => {
+    if (storageType === 'supabase' && initialized && loadHistory) {
+      // Lade History neu, um sicherzustellen, dass die neuesten Daten angezeigt werden
+      loadHistory().catch(error => {
+        console.error('Fehler beim Neuladen der History in StatsView:', error);
+      });
+    }
+  }, [storageType, initialized, loadHistory]);
 
   // --- FUNKTION: DEMO DATEN GENERIEREN (NUR ZUM TESTEN) ---
   const generateDemoData = () => {

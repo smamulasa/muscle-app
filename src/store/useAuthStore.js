@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { createClient } from '@supabase/supabase-js';
+import { getSupabaseClient } from '../lib/supabaseClient';
 
 /**
  * AUTH STORE
@@ -7,18 +7,6 @@ import { createClient } from '@supabase/supabase-js';
  * Verwaltet User-Authentifizierung über Supabase Auth.
  * Unterstützt Login, Register, Logout und Session-Management.
  */
-
-// Supabase Client für Auth
-const getSupabaseClient = () => {
-  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-  const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
-  
-  if (!supabaseUrl || !supabaseKey) {
-    throw new Error('VITE_SUPABASE_URL und VITE_SUPABASE_ANON_KEY müssen gesetzt sein');
-  }
-  
-  return createClient(supabaseUrl, supabaseKey);
-};
 
 const useAuthStore = create((set, get) => ({
   // --- STATE ---

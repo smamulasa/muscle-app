@@ -76,7 +76,7 @@ const RegisterForm = ({ onSwitchToLogin }) => {
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   required
-                  className="w-full pl-10 pr-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-[#453ACF] focus:border-transparent outline-none transition-all"
+                  className="w-full pl-10 pr-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-[#453ACF] focus:border-transparent outline-none transition-all text-gray-900 placeholder:text-gray-400"
                   placeholder="deine@email.de"
                 />
               </div>
@@ -96,7 +96,7 @@ const RegisterForm = ({ onSwitchToLogin }) => {
                   onChange={(e) => setPassword(e.target.value)}
                   required
                   minLength={6}
-                  className="w-full pl-10 pr-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-[#453ACF] focus:border-transparent outline-none transition-all"
+                  className="w-full pl-10 pr-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-[#453ACF] focus:border-transparent outline-none transition-all text-gray-900 placeholder:text-gray-400"
                   placeholder="Mindestens 6 Zeichen"
                 />
               </div>
@@ -119,7 +119,7 @@ const RegisterForm = ({ onSwitchToLogin }) => {
                   onChange={(e) => setConfirmPassword(e.target.value)}
                   required
                   minLength={6}
-                  className={`w-full pl-10 pr-4 py-3 bg-gray-50 border rounded-xl focus:ring-2 focus:ring-[#453ACF] focus:border-transparent outline-none transition-all ${
+                  className={`w-full pl-10 pr-4 py-3 bg-gray-50 border rounded-xl focus:ring-2 focus:ring-[#453ACF] focus:border-transparent outline-none transition-all text-gray-900 placeholder:text-gray-400 ${
                     confirmPassword && !passwordMatch ? 'border-red-300' : 'border-gray-200'
                   }`}
                   placeholder="Passwort wiederholen"

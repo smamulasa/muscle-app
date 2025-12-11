@@ -6,11 +6,14 @@ import ExerciseCard from '../components/ExerciseCard';
 import { WorkoutTimer } from '../components/WorkoutTimer';
 import ConfirmModal from '../components/ConfirmModal'; // Hier importieren wir das Modal wieder
 import BottomNav from '../components/BottomNav';
+import useWorkoutStore from '../store/useWorkoutStore';
 
 const WorkoutView = () => {
   const { id } = useParams();
   const navigate = useNavigate();
   const workout = workouts[id];
+  const storageType = import.meta.env.VITE_STORAGE_TYPE || 'local';
+  const finishWorkout = useWorkoutStore((state) => state.finishWorkout);
 
   const [isWorkoutStarted, setIsWorkoutStarted] = useState(false);
   const [startTime, setStartTime] = useState(null);
@@ -49,18 +52,36 @@ const WorkoutView = () => {
     setStartTime(Date.now()); 
   };
 
-  const handleFinish = () => {
+  const handleFinish = async () => {
     if (startTime) {
       const endTime = Date.now();
       const durationSeconds = Math.floor((endTime - startTime) / 1000);
-      const existingHistory = JSON.parse(localStorage.getItem('workoutHistory') || '{}');
-
-      existingHistory[id] = {
-        lastDuration: durationSeconds,
-        lastDate: new Date().toISOString(),
-        completed: true
-      };
-      localStorage.setItem('workoutHistory', JSON.stringify(existingHistory));
+      const today = new Date().toISOString().split('T')[0];
+      
+      // Bei Supabase: Verwende finishWorkout aus dem Store
+      if (storageType === 'supabase' && finishWorkout) {
+        console.log('💾 Speichere Workout-Session in Supabase:', {
+          workoutId: id,
+          title: workout.title,
+          duration: durationSeconds,
+          date: today
+        });
+        try {
+          await finishWorkout(id, workout.title, durationSeconds, today);
+          console.log('✅ Workout-Session gespeichert');
+        } catch (error) {
+          console.error('❌ Fehler beim Speichern der Session:', error);
+        }
+      } else {
+        // LocalStorage-Modus: Verwende LocalStorage
+        const existingHistory = JSON.parse(localStorage.getItem('workoutHistory') || '{}');
+        existingHistory[id] = {
+          lastDuration: durationSeconds,
+          lastDate: new Date().toISOString(),
+          completed: true
+        };
+        localStorage.setItem('workoutHistory', JSON.stringify(existingHistory));
+      }
     }
     setIsWorkoutStarted(false); 
     navigate('/'); 

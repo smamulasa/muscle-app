@@ -1,0 +1,36 @@
+-- ============================================
+-- TEST-USER ERSTELLEN (EINFACHE METHODE)
+-- ============================================
+-- 
+-- ⚠️ HINWEIS: Das direkte Erstellen von Usern in auth.users ist kompliziert.
+-- 
+-- EMPFOHLENE METHODE: Registriere dich einfach in der App!
+-- 
+-- Alternative: Verwende die Supabase UI:
+-- 1. Gehe zu Supabase Dashboard → Authentication → Users
+-- 2. Klicke auf "Add user" → "Create new user"
+-- 3. Gib Email und Passwort ein
+-- 4. Setze "Auto Confirm User" auf ON
+-- 
+-- ============================================
+
+-- Diese Methode funktioniert nicht zuverlässig, da auth.users
+-- spezielle Anforderungen hat. Besser: Registriere dich in der App!
+
+-- ============================================
+-- TEST-USER MANUELL ERSTELLEN
+-- ============================================
+-- 
+-- Gehe zu: Supabase Dashboard → Authentication → Users → "Add user"
+-- 
+-- User 1:
+--   Email: test1@muscle-app.de
+--   Passwort: test123456
+--   Auto Confirm User: ON
+-- 
+-- User 2:
+--   Email: test2@muscle-app.de
+--   Passwort: test123456
+--   Auto Confirm User: ON
+-- 
+-- ============================================

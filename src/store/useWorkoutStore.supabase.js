@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { createClient } from '@supabase/supabase-js';
+import { getSupabaseClient } from '../lib/supabaseClient';
 import useAuthStore from './useAuthStore';
 
 /**
@@ -15,25 +15,6 @@ import useAuthStore from './useAuthStore';
  * 
  * WICHTIG: Führe zuerst das Schema aus supabase/schema.sql in deinem Supabase Dashboard aus!
  */
-
-// Supabase Client einmalig initialisieren (Singleton)
-let supabaseClient = null;
-
-const getSupabaseClient = () => {
-  if (supabaseClient) {
-    return supabaseClient;
-  }
-  
-  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-  const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
-  
-  if (!supabaseUrl || !supabaseKey) {
-    throw new Error('VITE_SUPABASE_URL und VITE_SUPABASE_ANON_KEY müssen in .env.local gesetzt sein');
-  }
-  
-  supabaseClient = createClient(supabaseUrl, supabaseKey);
-  return supabaseClient;
-};
 
 // Queue-Speicher in LocalStorage
 const QUEUE_STORAGE_KEY = 'muscle-app-sync-queue';
@@ -120,13 +101,49 @@ const useWorkoutStoreSupabase = create((set, get) => ({
   isLoading: false,
   error: null,
   initialized: false,
+  userId: null, // Aktuelle User-ID (um User-Wechsel zu erkennen)
   isOnline: isOnline(),
   syncStatus: 'idle', // 'idle' | 'syncing' | 'synced' | 'error'
   queueLength: 0,
 
+  // --- RESET ---
+  reset: () => {
+    console.log('🔄 Setze Workout Store zurück');
+    set({
+      history: {},
+      sessions: [],
+      initialized: false,
+      userId: null,
+      isLoading: false,
+      error: null
+    });
+  },
+
   // --- INITIALISIERUNG ---
   init: async () => {
-    if (get().initialized) return;
+    // Hole aktuelle User-ID
+    const authState = useAuthStore.getState();
+    const currentUserId = authState.user?.id || null;
+    const storeState = get();
+    
+    // Prüfe ob User gewechselt hat
+    if (storeState.initialized && storeState.userId !== currentUserId) {
+      console.log('🔄 User gewechselt! Alte User-ID:', storeState.userId, 'Neue User-ID:', currentUserId);
+      // Setze Store zurück und lade Daten für neuen User
+      get().reset();
+    }
+    
+    // Wenn bereits initialisiert für diesen User, nicht erneut initialisieren
+    if (storeState.initialized && storeState.userId === currentUserId) {
+      console.log('✅ Store bereits initialisiert für User:', currentUserId);
+      return;
+    }
+    
+    // Wenn kein User eingeloggt, nicht initialisieren
+    if (!currentUserId) {
+      console.log('⚠️ Kein User eingeloggt - Store wird nicht initialisiert');
+      return;
+    }
     
     set({ isLoading: true, error: null });
     
@@ -169,7 +186,12 @@ const useWorkoutStoreSupabase = create((set, get) => ({
         await get().syncQueue();
       }
       
-      set({ initialized: true, isLoading: false });
+      set({ 
+        initialized: true, 
+        isLoading: false,
+        userId: currentUserId // Speichere User-ID
+      });
+      console.log('✅ Store initialisiert für User:', currentUserId);
     } catch (error) {
       console.error('Fehler beim Initialisieren des Supabase Stores:', error);
       set({ error: error.message, isLoading: false });
@@ -253,6 +275,20 @@ const useWorkoutStoreSupabase = create((set, get) => ({
       const authState = useAuthStore.getState();
       const userId = authState.user?.id || null;
       
+      // Prüfe auch die Session im Supabase Client
+      const { data: { session } } = await supabase.auth.getSession();
+      const sessionUserId = session?.user?.id || null;
+      
+      // Verwende sessionUserId als Fallback
+      const finalUserId = userId || sessionUserId;
+      
+      // Debug: Logge User-IDs
+      console.log('🔍 Debug loadHistory:', {
+        authStoreUserId: userId,
+        sessionUserId: sessionUserId,
+        finalUserId: finalUserId
+      });
+      
       // Query aufbauen
       let query = supabase
         .from('sets')
@@ -261,21 +297,62 @@ const useWorkoutStoreSupabase = create((set, get) => ({
         .order('set_index', { ascending: true });
       
       // Filter nach user_id wenn User eingeloggt
-      if (userId) {
-        query = query.eq('user_id', userId);
+      if (finalUserId) {
+        query = query.eq('user_id', finalUserId);
+        console.log('✅ Filtere nach user_id:', finalUserId);
       } else {
         // Ohne Auth: Nur Sets ohne user_id (für anonyme Nutzung)
         query = query.is('user_id', null);
+        console.log('⚠️ Keine User-ID - lade nur Sets ohne user_id');
       }
       
       const { data, error } = await query;
       
-      if (error) throw error;
+      if (error) {
+        console.error('❌ Fehler beim Laden der History:', error);
+        throw error;
+      }
+      
+      // Debug: Zeige geladene Daten
+      const loadedUserIds = data?.map(s => s.user_id) || [];
+      const uniqueUserIds = [...new Set(loadedUserIds)];
+      console.log('🔍 Geladene Sets:', {
+        anzahl: data?.length || 0,
+        user_ids: loadedUserIds,
+        erwartete_user_id: finalUserId,
+        alle_user_ids_eindeutig: uniqueUserIds,
+        problem: uniqueUserIds.length > 1 || (uniqueUserIds.length === 1 && uniqueUserIds[0] !== finalUserId) ? '⚠️ PROBLEM: Falsche user_ids geladen!' : '✅ OK'
+      });
+      
+      // Zeige Details jedes Sets
+      if (data && data.length > 0) {
+        console.log('📋 Details der geladenen Sets:', data.map(s => ({
+          id: s.id,
+          user_id: s.user_id,
+          exercise_id: s.exercise_id,
+          date: s.date,
+          set_index: s.set_index
+        })));
+      }
+      
+      // Zusätzliche Sicherheit: Filtere clientseitig nach user_id
+      // (falls RLS nicht richtig funktioniert)
+      const filteredData = finalUserId 
+        ? data?.filter(set => set.user_id === finalUserId) || []
+        : data?.filter(set => set.user_id === null) || [];
+      
+      if (filteredData.length !== (data?.length || 0)) {
+        console.warn('⚠️ RLS Filterung funktioniert nicht richtig!', {
+          geladen: data?.length || 0,
+          gefiltert: filteredData.length,
+          user_id: finalUserId
+        });
+      }
       
       // Transformiere Daten in die erwartete Struktur
       const history = {};
       
-      data?.forEach(set => {
+      filteredData.forEach(set => {
         const date = set.date.split('T')[0]; // Nur das Datum ohne Zeit
         
         if (!history[set.exercise_id]) {
@@ -322,6 +399,19 @@ const useWorkoutStoreSupabase = create((set, get) => ({
       const authState = useAuthStore.getState();
       const userId = authState.user?.id || null;
       
+      // Prüfe auch die Session im Supabase Client
+      const { data: { session } } = await supabase.auth.getSession();
+      const sessionUserId = session?.user?.id || null;
+      
+      // Verwende sessionUserId als Fallback
+      const finalUserId = userId || sessionUserId;
+      
+      console.log('🔍 Debug loadSessions:', {
+        authStoreUserId: userId,
+        sessionUserId: sessionUserId,
+        finalUserId: finalUserId
+      });
+      
       // Query aufbauen
       let query = supabase
         .from('sessions')
@@ -330,18 +420,58 @@ const useWorkoutStoreSupabase = create((set, get) => ({
         .limit(100); // Letzte 100 Sessions
       
       // Filter nach user_id wenn User eingeloggt
-      if (userId) {
-        query = query.eq('user_id', userId);
+      if (finalUserId) {
+        query = query.eq('user_id', finalUserId);
+        console.log('✅ Filtere Sessions nach user_id:', finalUserId);
       } else {
         // Ohne Auth: Nur Sessions ohne user_id (für anonyme Nutzung)
         query = query.is('user_id', null);
+        console.log('⚠️ Keine User-ID - lade nur Sessions ohne user_id');
       }
       
       const { data, error } = await query;
       
-      if (error) throw error;
+      if (error) {
+        console.error('❌ Fehler beim Laden der Sessions:', error);
+        throw error;
+      }
       
-      const sessions = data?.map(session => ({
+      // Debug: Zeige geladene Daten
+      const loadedSessionUserIds = data?.map(s => s.user_id) || [];
+      const uniqueSessionUserIds = [...new Set(loadedSessionUserIds)];
+      console.log('🔍 Geladene Sessions:', {
+        anzahl: data?.length || 0,
+        user_ids: loadedSessionUserIds,
+        erwartete_user_id: finalUserId,
+        alle_user_ids_eindeutig: uniqueSessionUserIds,
+        problem: uniqueSessionUserIds.length > 1 || (uniqueSessionUserIds.length === 1 && uniqueSessionUserIds[0] !== finalUserId) ? '⚠️ PROBLEM: Falsche user_ids geladen!' : '✅ OK'
+      });
+      
+      // Zeige Details jeder Session
+      if (data && data.length > 0) {
+        console.log('📋 Details der geladenen Sessions:', data.map(s => ({
+          id: s.id,
+          user_id: s.user_id,
+          workout_id: s.workout_id,
+          date: s.date
+        })));
+      }
+      
+      // Zusätzliche Sicherheit: Filtere clientseitig nach user_id
+      // (falls RLS nicht richtig funktioniert)
+      const filteredData = finalUserId 
+        ? data?.filter(session => session.user_id === finalUserId) || []
+        : data?.filter(session => session.user_id === null) || [];
+      
+      if (filteredData.length !== (data?.length || 0)) {
+        console.warn('⚠️ RLS Filterung funktioniert nicht richtig!', {
+          geladen: data?.length || 0,
+          gefiltert: filteredData.length,
+          user_id: finalUserId
+        });
+      }
+      
+      const sessions = filteredData.map(session => ({
         id: session.workout_id,
         title: session.title || session.workout_id,
         duration: session.duration,
@@ -410,6 +540,28 @@ const useWorkoutStoreSupabase = create((set, get) => ({
     const authState = useAuthStore.getState();
     const userId = authState.user?.id || null;
     
+    // Prüfe auch die Session im Supabase Client
+    const { data: { session } } = await supabase.auth.getSession();
+    const sessionUserId = session?.user?.id || null;
+    
+    // Debug: Logge User-IDs
+    console.log('🔍 Debug _logSetDirect:', {
+      authStoreUserId: userId,
+      sessionUserId: sessionUserId,
+      match: userId === sessionUserId
+    });
+    
+    if (!userId && !sessionUserId) {
+      console.warn('⚠️ Keine User-ID gefunden! User ist möglicherweise nicht eingeloggt.');
+    }
+    
+    if (userId !== sessionUserId) {
+      console.warn('⚠️ User-ID Mismatch! Auth Store:', userId, 'Session:', sessionUserId);
+    }
+    
+    // Verwende sessionUserId als Fallback
+    const finalUserId = userId || sessionUserId;
+    
     const upsertData = {
       exercise_id: exerciseId,
       date: today,
@@ -420,22 +572,30 @@ const useWorkoutStoreSupabase = create((set, get) => ({
     };
     
     // Füge user_id hinzu wenn User eingeloggt
-    if (userId) {
-      upsertData.user_id = userId;
+    if (finalUserId) {
+      upsertData.user_id = finalUserId;
+      console.log('✅ Setze user_id:', finalUserId);
+    } else {
+      console.warn('⚠️ Keine user_id gesetzt - Daten werden ohne User-ID gespeichert!');
     }
     
     // Bestimme onConflict basierend auf Auth
-    const onConflict = userId 
+    const onConflict = finalUserId 
       ? 'user_id,exercise_id,date,set_index'
       : 'exercise_id,date,set_index';
     
-    const { error } = await supabase
+    const { data, error } = await supabase
       .from('sets')
       .upsert(upsertData, { onConflict })
       .select()
       .single();
     
-    if (error) throw error;
+    if (error) {
+      console.error('❌ Fehler beim Speichern:', error);
+      throw error;
+    }
+    
+    console.log('✅ Set gespeichert:', data);
   },
 
   // 2. Ein ganzes Workout abschließen
@@ -495,6 +655,19 @@ const useWorkoutStoreSupabase = create((set, get) => ({
     const authState = useAuthStore.getState();
     const userId = authState.user?.id || null;
     
+    // Prüfe auch die Session im Supabase Client
+    const { data: { session } } = await supabase.auth.getSession();
+    const sessionUserId = session?.user?.id || null;
+    
+    // Verwende sessionUserId als Fallback
+    const finalUserId = userId || sessionUserId;
+    
+    console.log('🔍 Debug _finishWorkoutDirect:', {
+      authStoreUserId: userId,
+      sessionUserId: sessionUserId,
+      finalUserId: finalUserId
+    });
+    
     const upsertData = {
       workout_id: workoutId,
       title: title || workoutId,
@@ -503,22 +676,30 @@ const useWorkoutStoreSupabase = create((set, get) => ({
     };
     
     // Füge user_id hinzu wenn User eingeloggt
-    if (userId) {
-      upsertData.user_id = userId;
+    if (finalUserId) {
+      upsertData.user_id = finalUserId;
+      console.log('✅ Setze user_id für Session:', finalUserId);
+    } else {
+      console.warn('⚠️ Keine user_id gesetzt für Session!');
     }
     
     // Bestimme onConflict basierend auf Auth
-    const onConflict = userId 
+    const onConflict = finalUserId 
       ? 'user_id,workout_id,date'
       : 'workout_id,date';
     
-    const { error } = await supabase
+    const { data, error } = await supabase
       .from('sessions')
       .upsert(upsertData, { onConflict })
       .select()
       .single();
     
-    if (error) throw error;
+    if (error) {
+      console.error('❌ Fehler beim Speichern der Session:', error);
+      throw error;
+    }
+    
+    console.log('✅ Session gespeichert:', data);
   },
 
   // 3. Einen Satz löschen
