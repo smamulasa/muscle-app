@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { createClient } from '@supabase/supabase-js';
+import useAuthStore from './useAuthStore';
 
 /**
  * SUPABASE VERSION
@@ -248,13 +249,26 @@ const useWorkoutStoreSupabase = create((set, get) => ({
     try {
       const supabase = getSupabaseClient();
       
-      // Hole alle Sets (ohne user_id Filter, da schema-no-auth.sql verwendet wird)
-      // Prüfe zuerst, ob user_id Spalte existiert
-      const { data, error } = await supabase
+      // Hole User-ID aus Auth Store
+      const authState = useAuthStore.getState();
+      const userId = authState.user?.id || null;
+      
+      // Query aufbauen
+      let query = supabase
         .from('sets')
         .select('*')
         .order('date', { ascending: false })
         .order('set_index', { ascending: true });
+      
+      // Filter nach user_id wenn User eingeloggt
+      if (userId) {
+        query = query.eq('user_id', userId);
+      } else {
+        // Ohne Auth: Nur Sets ohne user_id (für anonyme Nutzung)
+        query = query.is('user_id', null);
+      }
+      
+      const { data, error } = await query;
       
       if (error) throw error;
       
@@ -304,12 +318,26 @@ const useWorkoutStoreSupabase = create((set, get) => ({
     try {
       const supabase = getSupabaseClient();
       
-      // Hole alle Sessions (ohne user_id Filter, da schema-no-auth.sql verwendet wird)
-      const { data, error } = await supabase
+      // Hole User-ID aus Auth Store
+      const authState = useAuthStore.getState();
+      const userId = authState.user?.id || null;
+      
+      // Query aufbauen
+      let query = supabase
         .from('sessions')
         .select('*')
         .order('date', { ascending: false })
         .limit(100); // Letzte 100 Sessions
+      
+      // Filter nach user_id wenn User eingeloggt
+      if (userId) {
+        query = query.eq('user_id', userId);
+      } else {
+        // Ohne Auth: Nur Sessions ohne user_id (für anonyme Nutzung)
+        query = query.is('user_id', null);
+      }
+      
+      const { data, error } = await query;
       
       if (error) throw error;
       
@@ -378,6 +406,10 @@ const useWorkoutStoreSupabase = create((set, get) => ({
     const supabase = getSupabaseClient();
     const today = new Date().toISOString().split('T')[0];
     
+    // Hole User-ID aus Auth Store
+    const authState = useAuthStore.getState();
+    const userId = authState.user?.id || null;
+    
     const upsertData = {
       exercise_id: exerciseId,
       date: today,
@@ -387,9 +419,19 @@ const useWorkoutStoreSupabase = create((set, get) => ({
       completed: true
     };
     
+    // Füge user_id hinzu wenn User eingeloggt
+    if (userId) {
+      upsertData.user_id = userId;
+    }
+    
+    // Bestimme onConflict basierend auf Auth
+    const onConflict = userId 
+      ? 'user_id,exercise_id,date,set_index'
+      : 'exercise_id,date,set_index';
+    
     const { error } = await supabase
       .from('sets')
-      .upsert(upsertData, { onConflict: 'exercise_id,date,set_index' })
+      .upsert(upsertData, { onConflict })
       .select()
       .single();
     
@@ -449,6 +491,10 @@ const useWorkoutStoreSupabase = create((set, get) => ({
     const supabase = getSupabaseClient();
     const dateStr = date || new Date().toISOString().split('T')[0];
     
+    // Hole User-ID aus Auth Store
+    const authState = useAuthStore.getState();
+    const userId = authState.user?.id || null;
+    
     const upsertData = {
       workout_id: workoutId,
       title: title || workoutId,
@@ -456,9 +502,19 @@ const useWorkoutStoreSupabase = create((set, get) => ({
       duration: parseInt(duration)
     };
     
+    // Füge user_id hinzu wenn User eingeloggt
+    if (userId) {
+      upsertData.user_id = userId;
+    }
+    
+    // Bestimme onConflict basierend auf Auth
+    const onConflict = userId 
+      ? 'user_id,workout_id,date'
+      : 'workout_id,date';
+    
     const { error } = await supabase
       .from('sessions')
-      .upsert(upsertData, { onConflict: 'workout_id,date' })
+      .upsert(upsertData, { onConflict })
       .select()
       .single();
     
@@ -513,12 +569,25 @@ const useWorkoutStoreSupabase = create((set, get) => ({
     const supabase = getSupabaseClient();
     const today = new Date().toISOString().split('T')[0];
     
-    const { error } = await supabase
+    // Hole User-ID aus Auth Store
+    const authState = useAuthStore.getState();
+    const userId = authState.user?.id || null;
+    
+    let deleteQuery = supabase
       .from('sets')
       .delete()
       .eq('exercise_id', exerciseId)
       .eq('date', today)
       .eq('set_index', setIndex);
+    
+    // Filter nach user_id wenn User eingeloggt
+    if (userId) {
+      deleteQuery = deleteQuery.eq('user_id', userId);
+    } else {
+      deleteQuery = deleteQuery.is('user_id', null);
+    }
+    
+    const { error } = await deleteQuery;
     
     if (error) throw error;
   },

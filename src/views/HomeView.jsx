@@ -1,13 +1,17 @@
 import React, { useEffect, useState, useMemo } from 'react';
-import { Play, Home, List, Activity, History, User, CheckCircle2, Clock, Trophy, TrendingUp, TrendingDown } from 'lucide-react';
+import { Play, Home, List, Activity, History, User, CheckCircle2, Clock, Trophy, TrendingUp, TrendingDown, LogOut } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { workouts } from '../data/workouts'; // WICHTIG: Import für dynamische Daten
 import BottomNav from '../components/BottomNav';
 import useWorkoutStore from '../store/useWorkoutStore';
+import useAuthStore from '../store/useAuthStore';
 
 const HomeView = () => {
   const navigate = useNavigate();
   const workoutHistory = useWorkoutStore((state) => state.history);
+  const storageType = import.meta.env.VITE_STORAGE_TYPE || 'local';
+  const user = useAuthStore((state) => state.user);
+  const signOut = useAuthStore((state) => state.signOut);
   
   // --- STATE ---
   const [history, setHistory] = useState({});
@@ -168,10 +172,32 @@ const HomeView = () => {
       <div className="sticky top-0 bg-gray-50/95 backdrop-blur-sm z-10 px-6 pt-8 pb-4 flex justify-between items-center">
         <div>
           <h1 className="text-3xl font-bold text-gray-900">Today</h1>
-          <p className="text-gray-500">Welcome back, Beast</p>
+          <p className="text-gray-500">
+            {storageType === 'supabase' && user 
+              ? `Willkommen, ${user.email?.split('@')[0] || 'User'}`
+              : 'Welcome back, Beast'
+            }
+          </p>
         </div>
-        <div className="w-10 h-10 rounded-full bg-[#453ACF]/10 border-2 border-white shadow-sm flex items-center justify-center text-[#453ACF] font-bold">
-          A
+        <div className="flex items-center gap-2">
+          {storageType === 'supabase' && user && (
+            <button
+              onClick={async () => {
+                await signOut();
+                navigate('/auth');
+              }}
+              className="p-2 rounded-full hover:bg-gray-100 text-gray-600 transition-colors"
+              title="Abmelden"
+            >
+              <LogOut size={20} />
+            </button>
+          )}
+          <div className="w-10 h-10 rounded-full bg-[#453ACF]/10 border-2 border-white shadow-sm flex items-center justify-center text-[#453ACF] font-bold">
+            {storageType === 'supabase' && user 
+              ? (user.email?.charAt(0).toUpperCase() || 'U')
+              : 'A'
+            }
+          </div>
         </div>
       </div>
 

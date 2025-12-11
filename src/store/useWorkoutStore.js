@@ -16,23 +16,28 @@ import useWorkoutStoreSupabase from './useWorkoutStore.supabase.js';
 
 // Lade Storage-Typ aus Environment
 const storageType = import.meta.env.VITE_STORAGE_TYPE || 'local';
+const isDev = import.meta.env.DEV;
 
-// DEBUG: Zeige alle Environment-Variablen (ohne sensible Daten)
-console.log('🔍 Environment-Variablen Debug:');
-console.log('  VITE_STORAGE_TYPE:', storageType);
-console.log('  VITE_SUPABASE_URL vorhanden:', !!import.meta.env.VITE_SUPABASE_URL);
-console.log('  VITE_SUPABASE_ANON_KEY vorhanden:', !!import.meta.env.VITE_SUPABASE_ANON_KEY);
-console.log('  VITE_SUPABASE_URL Wert:', import.meta.env.VITE_SUPABASE_URL ? import.meta.env.VITE_SUPABASE_URL.substring(0, 30) + '...' : 'undefined');
+// DEBUG: Zeige Environment-Variablen nur in Development
+if (isDev) {
+  console.log('🔍 Environment-Variablen Debug:');
+  console.log('  VITE_STORAGE_TYPE:', storageType);
+  console.log('  VITE_SUPABASE_URL vorhanden:', !!import.meta.env.VITE_SUPABASE_URL);
+  console.log('  VITE_SUPABASE_ANON_KEY vorhanden:', !!import.meta.env.VITE_SUPABASE_ANON_KEY);
+  console.log('  VITE_SUPABASE_URL Wert:', import.meta.env.VITE_SUPABASE_URL ? import.meta.env.VITE_SUPABASE_URL.substring(0, 30) + '...' : 'undefined');
+}
 
 // Wähle den richtigen Store basierend auf dem Storage-Typ
 let useWorkoutStore;
 
 if (storageType === 'supabase') {
-  console.log('📦 Verwende Supabase Store');
+  if (isDev) console.log('📦 Verwende Supabase Store');
   useWorkoutStore = useWorkoutStoreSupabase;
 } else {
-  console.log('💾 Verwende LocalStorage Store');
-  console.log('   Grund: VITE_STORAGE_TYPE ist nicht "supabase" (aktuell:', storageType, ')');
+  if (isDev) {
+    console.log('💾 Verwende LocalStorage Store');
+    console.log('   Grund: VITE_STORAGE_TYPE ist nicht "supabase" (aktuell:', storageType, ')');
+  }
   useWorkoutStore = useWorkoutStoreLocal;
 }
 
