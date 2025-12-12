@@ -8,6 +8,7 @@ import ProtectedRoute from './components/ProtectedRoute';
 // Wir importieren hier deine zwei Seiten (Views)
 import HomeView from './views/HomeView';
 import WorkoutView from './views/WorkoutView';
+import WorkoutsView from './views/WorkoutsView';
 import StatsView from './views/StatsView';
 import ExerciseDetailView from './views/ExerciseDetailView';
 import WorkoutSessionDetailView from './views/WorkoutSessionDetailView';
@@ -68,6 +69,7 @@ function App() {
           {storageType === 'supabase' ? (
             <>
               <Route path="/" element={<ProtectedRoute><HomeView /></ProtectedRoute>} />
+              <Route path="/workouts" element={<ProtectedRoute><WorkoutsView /></ProtectedRoute>} />
               <Route path="/workout/:id" element={<ProtectedRoute><WorkoutView /></ProtectedRoute>} />
               <Route path="/stats" element={<ProtectedRoute><StatsView /></ProtectedRoute>} />
               <Route path="/stats/exercise/:id" element={<ProtectedRoute><ExerciseDetailView /></ProtectedRoute>} />
@@ -79,6 +81,7 @@ function App() {
             <>
               {/* LocalStorage-Modus: Alle Routen öffentlich */}
               <Route path="/" element={<HomeView />} />
+              <Route path="/workouts" element={<WorkoutsView />} />
               <Route path="/workout/:id" element={<WorkoutView />} />
               <Route path="/stats" element={<StatsView />} />
               <Route path="/stats/exercise/:id" element={<ExerciseDetailView />} />

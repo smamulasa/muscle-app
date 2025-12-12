@@ -8,7 +8,7 @@ const BottomNav = () => {
 
   const navItems = [
     { icon: Home, path: '/', label: 'Home', isHome: true },
-    { icon: List, path: '/', label: 'Workouts', onClick: () => navigate('/') },
+    { icon: List, path: '/workouts', label: 'Workouts' },
     { icon: Activity, path: '/stats', label: 'Stats' },
     { icon: History, path: '/', label: 'History', onClick: () => navigate('/') },
     { icon: User, path: '/', label: 'Profile', onClick: () => navigate('/') }
@@ -22,6 +22,10 @@ const BottomNav = () => {
     // Activity ist aktiv wenn wir auf '/stats' sind
     if (item.path === '/stats') {
       return location.pathname.startsWith('/stats');
+    }
+    // Workouts ist aktiv wenn wir auf '/workouts' sind
+    if (item.path === '/workouts') {
+      return location.pathname.startsWith('/workouts');
     }
     // Alle anderen sind nie aktiv
     return false;
