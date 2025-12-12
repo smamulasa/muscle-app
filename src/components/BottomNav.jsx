@@ -7,41 +7,57 @@ const BottomNav = () => {
   const location = useLocation();
 
   const navItems = [
-    { icon: Home, path: '/', label: 'Home' },
-    { icon: List, path: '/', label: 'Workouts', onClick: () => navigate('/') }, // Geht zurück zur Home-Seite
+    { icon: Home, path: '/', label: 'Home', isHome: true },
+    { icon: List, path: '/', label: 'Workouts', onClick: () => navigate('/') },
     { icon: Activity, path: '/stats', label: 'Stats' },
-    { icon: History, path: '/', label: 'History', onClick: () => navigate('/') }, // Geht zurück zur Home-Seite
-    { icon: User, path: '/', label: 'Profile', onClick: () => navigate('/') } // Geht zurück zur Home-Seite
+    { icon: History, path: '/', label: 'History', onClick: () => navigate('/') },
+    { icon: User, path: '/', label: 'Profile', onClick: () => navigate('/') }
   ];
 
-  const isActive = (path) => {
-    if (path === '/') {
+  const isActive = (item) => {
+    // Nur Home ist aktiv wenn wir auf '/' sind
+    if (item.isHome) {
       return location.pathname === '/';
     }
-    return location.pathname.startsWith(path);
+    // Activity ist aktiv wenn wir auf '/stats' sind
+    if (item.path === '/stats') {
+      return location.pathname.startsWith('/stats');
+    }
+    // Alle anderen sind nie aktiv
+    return false;
   };
 
   return (
-    <div className="fixed bottom-6 left-1/2 -translate-x-1/2 w-[calc(100%-3rem)] max-w-[25rem] bg-white rounded-full shadow-2xl shadow-gray-200 border border-gray-100 p-2 flex justify-between items-center z-50">
-      {navItems.map((item) => {
-        const Icon = item.icon;
-        const active = isActive(item.path);
-        
-        return (
-          <button
-            key={item.path + item.label}
-            onClick={item.onClick || (() => navigate(item.path))}
-            className={`p-3 rounded-full flex flex-col items-center gap-1 transition-all ${
-              active 
-                ? 'bg-gray-100 text-gray-900' 
-                : 'text-gray-400 hover:text-gray-600'
-            }`}
-            aria-label={item.label}
-          >
-            <Icon size={24} strokeWidth={active ? 2.5 : 2} />
-          </button>
-        );
-      })}
+    <div className="fixed bottom-6 left-1/2 -translate-x-1/2 w-[calc(100%-3rem)] max-w-[25rem] z-50">
+      <nav className="bg-[#1c1c1e] rounded-full shadow-2xl border border-white/10 p-2 flex justify-between items-center">
+        {navItems.map((item) => {
+          const Icon = item.icon;
+          const active = isActive(item);
+          
+          return (
+            <button
+              key={item.path + item.label}
+              onClick={item.onClick || (() => navigate(item.path))}
+              className="flex items-center justify-center p-2 transition-all relative"
+              aria-label={item.label}
+            >
+              {/* Weißer Kreis um das Icon */}
+              <div className={`relative w-10 h-10 rounded-full flex items-center justify-center transition-all ${
+                active 
+                  ? 'bg-white ring-2 ring-[#a855f7] scale-105' 
+                  : 'bg-white hover:scale-105'
+              }`}>
+                <Icon 
+                  size={active ? 22 : 20} 
+                  strokeWidth={active ? 2.5 : 2}
+                  fill={active ? 'currentColor' : 'none'}
+                  className={active ? 'text-[#a855f7]' : 'text-gray-600'}
+                />
+              </div>
+            </button>
+          );
+        })}
+      </nav>
     </div>
   );
 };
