@@ -1,12 +1,15 @@
 import React, { useMemo, useState, useEffect } from 'react';
 import { X, Play, Clock, BarChart3, Dumbbell, Sparkles } from 'lucide-react';
-import { workouts } from '../data/workouts';
+import { getTemplateById } from '../data/workoutTemplates';
 import useWorkoutStore from '../store/useWorkoutStore';
+import ExerciseDetailSheet from './ExerciseDetailSheet';
 
-const WorkoutPreviewModal = ({ isOpen, onClose, workoutId, onStartWorkout }) => {
+const WorkoutPreviewModal = ({ isOpen, onClose, templateId, onStartWorkout }) => {
   const [isClosing, setIsClosing] = useState(false);
   const [shouldRender, setShouldRender] = useState(false);
   const [isAnimating, setIsAnimating] = useState(false);
+  const [selectedExercise, setSelectedExercise] = useState(null);
+  const [isExerciseDetailOpen, setIsExerciseDetailOpen] = useState(false);
 
   // Handle opening animation
   useEffect(() => {
@@ -47,78 +50,111 @@ const WorkoutPreviewModal = ({ isOpen, onClose, workoutId, onStartWorkout }) => 
   };
 
   // Alle Hooks müssen IMMER in der gleichen Reihenfolge aufgerufen werden
-  const workout = workoutId ? workouts[workoutId] : null;
+  const template = templateId ? getTemplateById(templateId) : null;
   const sessions = useWorkoutStore((state) => state.sessions);
 
   // Berechne Recommendation Text
   const recommendationText = useMemo(() => {
-    if (!workoutId || sessions.length === 0) return null;
+    if (!templateId || sessions.length === 0) return null;
     
     const sortedSessions = [...sessions].sort((a, b) => new Date(b.date) - new Date(a.date));
     const lastWorkout = sortedSessions[0];
     
-    if (lastWorkout && lastWorkout.id !== workoutId) {
-      const lastWorkoutName = workouts[lastWorkout.id]?.title || lastWorkout.id;
+    if (lastWorkout && lastWorkout.id !== templateId) {
+      // Versuche Template-Name zu finden, sonst Fallback
+      const lastTemplate = getTemplateById(lastWorkout.id);
+      const lastWorkoutName = lastTemplate?.name || lastWorkout.title || lastWorkout.id;
       return { text: `Recommended because you trained`, workoutName: lastWorkoutName, suffix: `yesterday.` };
     }
     return null;
-  }, [sessions, workoutId]);
+  }, [sessions, templateId]);
 
-  // Berechne Equipment (vereinfacht - alle Übungen durchgehen)
+  // Berechne Equipment aus exercises[].equipment (jetzt ein String)
   const equipment = useMemo(() => {
-    if (!workout?.exercises) return 'Various';
+    if (!template?.exercises) return 'Various';
     const equipmentSet = new Set();
-    workout.exercises.forEach(ex => {
-      const name = ex.name.toLowerCase();
-      if (name.includes('barbell') || name.includes('langhantel')) equipmentSet.add('Barbell');
-      if (name.includes('dumbbell') || name.includes('kurzhantel') || name.includes('kh')) equipmentSet.add('Dumbbell');
-      if (name.includes('bench') || name.includes('bank')) equipmentSet.add('Bench');
-      if (name.includes('cable') || name.includes('kabel')) equipmentSet.add('Cable');
-      if (name.includes('machine') || name.includes('maschine')) equipmentSet.add('Machine');
+    template.exercises.forEach(ex => {
+      if (ex.equipment) {
+        // Equipment ist jetzt ein String, kann aber mehrere Werte enthalten
+        const eqString = typeof ex.equipment === 'string' ? ex.equipment : String(ex.equipment);
+        // Teile bei " oder " oder ", " auf
+        const parts = eqString.split(/\s+oder\s+|\s*,\s*/);
+        parts.forEach(part => {
+          const trimmed = part.trim();
+          if (trimmed) equipmentSet.add(trimmed);
+        });
+      }
     });
     return Array.from(equipmentSet).slice(0, 2).join(', ') || 'Various';
-  }, [workout]);
+  }, [template]);
 
-  // Muscle Breakdown (vereinfacht basierend auf Workout-ID)
+  // Muscle Breakdown aus exercises[].highlightedZones
   const muscleBreakdown = useMemo(() => {
-    if (workoutId === 'push') {
-      return [
-        { name: 'Chest', percentage: 40, color: '#F2B8B5' },
-        { name: 'Shoulders', percentage: 35, color: '#F4D1A6' },
-        { name: 'Triceps', percentage: 25, color: '#E3C7E8' }
-      ];
-    } else if (workoutId === 'pull') {
-      return [
-        { name: 'Back', percentage: 60, color: '#F2B8B5' },
-        { name: 'Biceps', percentage: 40, color: '#F4D1A6' }
-      ];
-    } else if (workoutId === 'legs') {
-      return [
-        { name: 'Quads', percentage: 50, color: '#F2B8B5' },
-        { name: 'Hamstrings', percentage: 30, color: '#F4D1A6' },
-        { name: 'Calves', percentage: 20, color: '#E3C7E8' }
-      ];
-    } else if (workoutId === 'shoulders') {
-      return [
-        { name: 'Shoulders', percentage: 100, color: '#F4D1A6' }
-      ];
-    } else if (workoutId === 'core') {
-      return [
-        { name: 'Core', percentage: 100, color: '#E3C7E8' }
-      ];
-    }
-    return [
-      { name: 'Upper', percentage: 50, color: '#F2B8B5' },
-      { name: 'Lower', percentage: 50, color: '#F4D1A6' }
-    ];
-  }, [workoutId]);
+    if (!template?.exercises) return [];
+    
+    const zoneCounts = {};
+    template.exercises.forEach(ex => {
+      if (ex.highlightedZones && Array.isArray(ex.highlightedZones)) {
+        ex.highlightedZones.forEach(zone => {
+          zoneCounts[zone] = (zoneCounts[zone] || 0) + 1;
+        });
+      }
+    });
+    
+    const total = Object.values(zoneCounts).reduce((sum, count) => sum + count, 0);
+    if (total === 0) return [];
+    
+    // Mapping von zone-Namen zu Anzeigenamen und Farben
+    const zoneMapping = {
+      'chest': { name: 'Chest', color: '#F2B8B5' },
+      'upper_chest': { name: 'Upper Chest', color: '#F2B8B5' },
+      'front_delts': { name: 'Shoulders', color: '#F4D1A6' },
+      'side_delts': { name: 'Shoulders', color: '#F4D1A6' },
+      'rear_delts': { name: 'Shoulders', color: '#F4D1A6' },
+      'triceps': { name: 'Triceps', color: '#E3C7E8' },
+      'lats': { name: 'Back', color: '#F2B8B5' },
+      'upper_back': { name: 'Back', color: '#F2B8B5' },
+      'lower_back': { name: 'Lower Back', color: '#F2B8B5' },
+      'biceps': { name: 'Biceps', color: '#F4D1A6' },
+      'quads': { name: 'Quads', color: '#F2B8B5' },
+      'hamstrings': { name: 'Hamstrings', color: '#F4D1A6' },
+      'calves': { name: 'Calves', color: '#E3C7E8' },
+      'core': { name: 'Core', color: '#E3C7E8' },
+      'abs': { name: 'Abs', color: '#E3C7E8' },
+      'lower_abs': { name: 'Lower Abs', color: '#E3C7E8' },
+      'glutes': { name: 'Glutes', color: '#F4D1A6' },
+      'obliques': { name: 'Obliques', color: '#E3C7E8' }
+    };
+    
+    // Gruppiere ähnliche Zonen zusammen (z.B. alle Shoulder-Varianten)
+    const groupedZones = {};
+    Object.entries(zoneCounts).forEach(([zone, count]) => {
+      const mapping = zoneMapping[zone] || { name: zone, color: '#F2B8B5' };
+      const displayName = mapping.name;
+      if (!groupedZones[displayName]) {
+        groupedZones[displayName] = { count: 0, color: mapping.color };
+      }
+      groupedZones[displayName].count += count;
+    });
+    
+    const totalGrouped = Object.values(groupedZones).reduce((sum, item) => sum + item.count, 0);
+    if (totalGrouped === 0) return [];
+    
+    return Object.entries(groupedZones)
+      .map(([name, data]) => ({
+        name,
+        percentage: Math.round((data.count / totalGrouped) * 100),
+        color: data.color
+      }))
+      .sort((a, b) => b.percentage - a.percentage);
+  }, [template]);
 
   // Early returns NACH allen Hooks
   if (!shouldRender) return null;
-  if (!workout || !workoutId) return null;
+  if (!template || !templateId) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex flex-col items-center justify-end">
+    <div className="fixed inset-0 z-50 flex flex-col items-center justify-end overflow-x-hidden">
       {/* Backdrop */}
       <div 
         className={`absolute inset-0 bg-black/60 backdrop-blur-sm transition-opacity duration-300 ${
@@ -150,39 +186,43 @@ const WorkoutPreviewModal = ({ isOpen, onClose, workoutId, onStartWorkout }) => 
         </div>
 
         {/* Scrollable Content */}
-        <div className="flex-1 overflow-y-auto hide-scrollbar pb-36">
-          <div className="px-5 pt-6 pb-2">
-            <h2 className="text-[32px] leading-tight font-bold text-white tracking-tight mb-1">{workout.title}</h2>
-            <p className="text-gray-400 text-[15px] font-medium mb-5">{workout.subtitle || 'Chest + Shoulders + Triceps Focus'}</p>
+        <div className="flex-1 overflow-y-auto overflow-x-hidden hide-scrollbar pb-36">
+          <div className="px-5 pt-6 pb-2 max-w-full">
+            <h2 className="text-[32px] leading-tight font-bold text-white tracking-tight mb-1 break-words">{template.name}</h2>
+            <p className="text-gray-400 text-[15px] font-medium mb-5 break-words">{template.focus}</p>
             
             {/* Recommendation Badge */}
             {recommendationText && (
-              <div className="flex items-center gap-2 px-2 py-1 rounded-lg bg-[#1c1c1e] border border-white/5 mb-4 w-full">
+              <div className="flex items-center gap-2 px-2 py-1 rounded-lg bg-[#1c1c1e] border border-white/5 mb-4 w-full max-w-full overflow-hidden">
                 <Sparkles size={16} className="text-[#2FD159] shrink-0" />
-                <span className="text-[12px] font-medium text-gray-300 whitespace-nowrap flex-1 min-w-0">
-                  {recommendationText.text}{' '}
-                  <span className="text-white font-semibold">{recommendationText.workoutName}</span>{' '}
-                  {recommendationText.suffix}
+                <span className="text-[12px] font-medium text-gray-300 flex-1 min-w-0 overflow-hidden">
+                  <span className="inline-block truncate">
+                    {recommendationText.text}{' '}
+                    <span className="text-white font-semibold">{recommendationText.workoutName}</span>{' '}
+                    {recommendationText.suffix}
+                  </span>
                 </span>
               </div>
             )}
           </div>
 
           {/* Metrics Cards */}
-          <div className="w-full px-5 mb-8">
-            <div className="grid grid-cols-3 gap-2">
+          <div className="w-full px-5 mb-8 max-w-full overflow-x-hidden">
+            <div className="grid grid-cols-3 gap-2 max-w-full">
               <div className="flex flex-col items-start justify-between bg-[#2c2c2e] h-[92px] rounded-2xl p-2.5 border border-white/5 shadow-sm min-w-0">
                 <Clock size={22} className="text-[#2FD159]" />
                 <div className="w-full">
                   <div className="text-[11px] text-gray-400 font-semibold uppercase tracking-wider mb-0.5 truncate">Duration</div>
-                  <div className="text-[16px] font-bold text-white truncate">{workout.duration || '50 min'}</div>
+                  <div className="text-[16px] font-bold text-white truncate">{template.estimatedDurationMinutes} min</div>
                 </div>
               </div>
               <div className="flex flex-col items-start justify-between bg-[#2c2c2e] h-[92px] rounded-2xl p-2.5 border border-white/5 shadow-sm min-w-0">
                 <BarChart3 size={22} className="text-[#2FD159]" />
                 <div className="w-full">
                   <div className="text-[11px] text-gray-400 font-semibold uppercase tracking-wider mb-0.5 truncate">Level</div>
-                  <div className="text-[15px] font-bold text-white truncate">Intermediate</div>
+                  <div className="text-[15px] font-bold text-white truncate">
+                    {template.difficulty}
+                  </div>
                 </div>
               </div>
               <div className="flex flex-col items-start justify-between bg-[#2c2c2e] h-[92px] rounded-2xl p-2.5 border border-white/5 shadow-sm min-w-0">
@@ -196,9 +236,9 @@ const WorkoutPreviewModal = ({ isOpen, onClose, workoutId, onStartWorkout }) => 
           </div>
 
           {/* Muscle Breakdown */}
-          <div className="px-5 mb-8">
+          <div className="px-5 mb-8 max-w-full overflow-x-hidden">
             <h3 className="text-[19px] font-bold text-white mb-4">Muscle Breakdown</h3>
-            <div className="w-full h-3 rounded-full flex overflow-hidden mb-3 bg-[#2c2c2e] border border-white/5">
+            <div className="w-full h-3 rounded-full flex overflow-hidden mb-3 bg-[#2c2c2e] border border-white/5 max-w-full">
               {muscleBreakdown.map((muscle, index) => (
                 <div 
                   key={muscle.name}
@@ -227,61 +267,79 @@ const WorkoutPreviewModal = ({ isOpen, onClose, workoutId, onStartWorkout }) => 
           </div>
 
           {/* Exercises List */}
-          <div className="px-5 space-y-4">
-            <div className="flex items-center justify-between mb-2">
-              <h3 className="text-[19px] font-bold text-white">Exercises ({workout.exercises?.length || 0})</h3>
-              <button className="text-[#2FD159] font-semibold text-[15px]">See Details</button>
+          <div className="px-5 space-y-4 max-w-full overflow-x-hidden">
+            <div className="flex items-center justify-between mb-2 max-w-full">
+              <h3 className="text-[19px] font-bold text-white">Exercises ({template.exercises?.length || 0})</h3>
             </div>
             
-            {workout.exercises && workout.exercises.map((exercise, index) => {
-              // Bestimme Muskelgruppe für Badge
-              const getMuscleGroup = (exerciseName) => {
-                const name = exerciseName.toLowerCase();
-                if (name.includes('chest') || name.includes('brust') || name.includes('bench') || name.includes('bank')) {
-                  return { name: 'Chest', color: '#F2B8B5' };
-                }
-                if (name.includes('shoulder') || name.includes('schulter') || name.includes('press') && !name.includes('bench')) {
-                  return { name: 'Shoulders', color: '#F4D1A6' };
-                }
-                if (name.includes('tricep') || name.includes('dip')) {
-                  return { name: 'Triceps', color: '#E3C7E8' };
-                }
-                if (name.includes('bicep') || name.includes('curl')) {
-                  return { name: 'Biceps', color: '#F4D1A6' };
-                }
-                if (name.includes('back') || name.includes('rücken') || name.includes('lat') || name.includes('row')) {
-                  return { name: 'Back', color: '#F2B8B5' };
-                }
-                return { name: 'Upper', color: '#F2B8B5' };
+            {template.exercises && template.exercises
+              .sort((a, b) => (a.order || 0) - (b.order || 0))
+              .map((exercise, index) => {
+              // Verwende primary Muskelgruppe aus Template (jetzt ein Array)
+              const primaryMuscles = Array.isArray(exercise.primary) ? exercise.primary : [exercise.primary || 'Upper'];
+              const primaryMuscle = primaryMuscles[0]; // Nimm die erste primäre Muskelgruppe
+              
+              const muscleColors = {
+                'Brust': '#F2B8B5',
+                'Obere Brust': '#F2B8B5',
+                'Schultern': '#F4D1A6',
+                'Schulter': '#F4D1A6',
+                'Seitliche Schulter': '#F4D1A6',
+                'Hintere Schulter': '#F4D1A6',
+                'Trizeps': '#E3C7E8',
+                'Lats': '#F2B8B5',
+                'Oberer Rücken': '#F2B8B5',
+                'Unterer Rücken': '#F2B8B5',
+                'Bizeps': '#F4D1A6',
+                'Quadrizeps': '#F2B8B5',
+                'Hamstrings': '#F4D1A6',
+                'Waden': '#E3C7E8',
+                'Core': '#E3C7E8',
+                'Gerade Bauchmuskeln': '#E3C7E8',
+                'Unterbauch': '#E3C7E8',
+                'Glutes': '#F4D1A6',
+                'Obliques': '#E3C7E8',
+                'Brachialis': '#F4D1A6'
               };
-
-              const muscleGroup = getMuscleGroup(exercise.name);
+              const muscleGroup = {
+                name: primaryMuscle,
+                color: muscleColors[primaryMuscle] || '#F2B8B5'
+              };
               const reps = exercise.reps || '8-10';
               
               return (
                 <div 
                   key={exercise.id || index}
-                  className="group flex items-center gap-4 bg-[#1c1c1e] p-3 rounded-2xl border border-white/5 hover:bg-[#2c2c2e] transition-all"
+                  className="group flex items-center gap-4 bg-[#1c1c1e] p-3 rounded-2xl border border-white/5 hover:bg-[#2c2c2e] transition-all cursor-pointer"
+                  onClick={() => {
+                    setSelectedExercise(exercise);
+                    setIsExerciseDetailOpen(true);
+                  }}
                 >
                   <div className="w-16 h-16 rounded-xl bg-[#2c2c2e] overflow-hidden shrink-0 relative">
                     {exercise.image ? (
-                      <img 
-                        alt={exercise.name} 
-                        className="w-full h-full object-cover opacity-80 group-hover:scale-105 transition-transform duration-500" 
-                        src={exercise.image}
-                        onError={(e) => {
-                          e.target.style.display = 'none';
-                        }}
-                      />
+                      <>
+                        <img 
+                          alt={exercise.name} 
+                          className="w-full h-full object-cover opacity-80 group-hover:scale-105 transition-transform duration-500" 
+                          src={exercise.image}
+                          onError={(e) => {
+                            e.target.style.display = 'none';
+                            const fallback = e.target.nextElementSibling;
+                            if (fallback) fallback.style.display = 'flex';
+                          }}
+                        />
+                        <div className="w-full h-full flex items-center justify-center text-2xl bg-gray-800 absolute inset-0" style={{ display: 'none' }}>💪</div>
+                      </>
                     ) : (
                       <div className="w-full h-full flex items-center justify-center text-2xl bg-gray-800">💪</div>
                     )}
                   </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex justify-between items-center mb-1">
-                      <h4 className="text-[17px] font-semibold text-white truncate">{exercise.name}</h4>
+                  <div className="flex-1 min-w-0 max-w-full overflow-hidden">
+                    <div className="flex justify-between items-center mb-1 gap-2 max-w-full">
+                      <h4 className="text-[17px] font-semibold text-white truncate flex-1 min-w-0">{exercise.name}</h4>
                       <span 
-                        className="text-[10px] font-bold uppercase tracking-wider px-2 py-1 rounded-md ml-2"
+                        className="text-[9px] font-bold uppercase tracking-wider px-2 py-1 rounded-md shrink-0 whitespace-nowrap"
                         style={{
                           color: muscleGroup.color,
                           backgroundColor: `${muscleGroup.color}1A`
@@ -293,7 +351,7 @@ const WorkoutPreviewModal = ({ isOpen, onClose, workoutId, onStartWorkout }) => 
                     <div className="text-[14px] text-gray-400 flex items-center gap-2">
                       <span className="text-white font-medium">{exercise.sets || 3}</span> sets
                       <span className="text-gray-600">•</span>
-                      <span className="text-white font-medium">{reps}</span> reps
+                      <span className="text-white font-medium">{exercise.reps || '8-10'}</span> reps
                     </div>
                   </div>
                 </div>
@@ -303,7 +361,7 @@ const WorkoutPreviewModal = ({ isOpen, onClose, workoutId, onStartWorkout }) => 
         </div>
 
         {/* Bottom Actions */}
-        <div className="absolute bottom-0 left-0 w-full px-5 py-6 bg-[#121212]/95 backdrop-blur-xl border-t border-white/10 z-30">
+        <div className="absolute bottom-0 left-0 w-full px-5 py-6 bg-[#121212]/95 backdrop-blur-xl border-t border-white/10 z-30 max-w-full overflow-x-hidden">
           <button 
             onClick={() => {
               // Close modal immediately without animation, then navigate
@@ -313,13 +371,20 @@ const WorkoutPreviewModal = ({ isOpen, onClose, workoutId, onStartWorkout }) => 
                 onStartWorkout();
               }, 50);
             }}
-            className="w-full bg-white text-black font-bold text-[17px] py-4 rounded-2xl shadow-lg hover:bg-gray-200 active:scale-[0.98] transition-all flex items-center justify-center gap-2 border border-[#a855f7]"
+            className="w-full max-w-full bg-white text-black font-bold text-[17px] py-4 rounded-2xl shadow-lg hover:bg-gray-200 active:scale-[0.98] transition-all flex items-center justify-center gap-2 border border-[#a855f7]"
           >
             <Play size={24} fill="currentColor" />
             Start Workout
           </button>
         </div>
       </div>
+
+      {/* Exercise Detail Sheet */}
+      <ExerciseDetailSheet
+        isOpen={isExerciseDetailOpen}
+        onClose={() => setIsExerciseDetailOpen(false)}
+        exercise={selectedExercise}
+      />
     </div>
   );
 };

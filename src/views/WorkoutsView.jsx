@@ -2,6 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, MoreHorizontal, Play, TrendingUp, Flame, Dumbbell, Trophy, ChevronRight } from 'lucide-react';
 import { workouts } from '../data/workouts';
+import { workoutTemplates, getTemplatesByCategory, getRecommendedTemplate } from '../data/workoutTemplates';
 import BottomNav from '../components/BottomNav';
 import useWorkoutStore from '../store/useWorkoutStore';
 import WorkoutPreviewModal from '../components/WorkoutPreviewModal';
@@ -11,40 +12,46 @@ const WorkoutsView = () => {
   const sessions = useWorkoutStore((state) => state.sessions);
   const workoutHistory = useWorkoutStore((state) => state.history);
   const [selectedCategory, setSelectedCategory] = useState('Upper');
-  const [previewWorkoutId, setPreviewWorkoutId] = useState(null);
+  const [previewTemplateId, setPreviewTemplateId] = useState(null);
 
-  // Kategorisiere Workouts
-  const categorizedWorkouts = useMemo(() => {
-    return {
-      Upper: ['push', 'shoulders'],
-      Lower: ['legs'],
-      Core: ['core'],
-      'Full Body': ['push', 'pull', 'legs'] // Könnte später erweitert werden
-    };
-  }, []);
+  // Mapping UI-Kategorien zu Template-Kategorien
+  const categoryMapping = {
+    'Upper': 'upper',
+    'Lower': 'lower',
+    'Core': 'core',
+    'Full Body': 'full_body'
+  };
 
-  // Aktuelle Workouts basierend auf Kategorie
-  const currentWorkouts = useMemo(() => {
-    const workoutIds = categorizedWorkouts[selectedCategory] || [];
-    return workoutIds.map(id => workouts[id]).filter(Boolean);
-  }, [selectedCategory, categorizedWorkouts]);
+  // Empfohlenes Template für die aktuelle Kategorie
+  const recommendedTemplate = useMemo(() => {
+    const templateCategory = categoryMapping[selectedCategory];
+    if (!templateCategory) return null;
+    return getRecommendedTemplate(templateCategory, sessions);
+  }, [selectedCategory, sessions]);
 
-  // Alle Übungen aus aktuellen Workouts für "Upper Exercises"
+  // Alle Templates der aktuellen Kategorie
+  const categoryTemplates = useMemo(() => {
+    const templateCategory = categoryMapping[selectedCategory];
+    if (!templateCategory) return [];
+    return getTemplatesByCategory(templateCategory);
+  }, [selectedCategory]);
+
+  // Alle Übungen aus Templates der aktuellen Kategorie
   const allExercises = useMemo(() => {
     const exercises = [];
-    currentWorkouts.forEach(workout => {
-      if (workout.exercises) {
-        workout.exercises.forEach(ex => {
+    categoryTemplates.forEach(template => {
+      if (template.exercises) {
+        template.exercises.forEach(ex => {
           exercises.push({
             ...ex,
-            workoutId: workout.id,
-            workoutTitle: workout.title
+            templateId: template.id,
+            templateName: template.name
           });
         });
       }
     });
     return exercises.slice(0, 8); // Max 8 für die Anzeige
-  }, [currentWorkouts]);
+  }, [categoryTemplates]);
 
   // Workout Plans (könnte später dynamisch sein)
   const workoutPlans = [
@@ -87,24 +94,25 @@ const WorkoutsView = () => {
     });
   }, [sessions]);
 
-  // Today's Goal - basierend auf empfohlenem Workout
+  // Today's Goal - basierend auf empfohlenem Template
   const todaysGoal = useMemo(() => {
-    if (currentWorkouts.length > 0) {
-      const recommended = currentWorkouts[0]; // Erste Workout der Kategorie
+    if (recommendedTemplate) {
       return {
-        title: 'Push Limits',
-        duration: recommended.duration || '45 min',
-        level: 'Intermediate',
-        workoutId: recommended.id
+        title: recommendedTemplate.name,
+        focus: recommendedTemplate.focus,
+        duration: `${recommendedTemplate.estimatedDurationMinutes} min`,
+        level: recommendedTemplate.difficulty,
+        templateId: recommendedTemplate.id
       };
     }
     return {
-      title: 'Push Limits',
-      duration: '45 min',
-      level: 'Intermediate',
-      workoutId: 'push'
+      title: 'No Workout Available',
+      focus: '',
+      duration: '0 min',
+      level: 'Beginner',
+      templateId: null
     };
-  }, [currentWorkouts]);
+  }, [recommendedTemplate]);
 
   const formatDate = (isoString) => {
     if (!isoString) return '';
@@ -209,7 +217,9 @@ const WorkoutsView = () => {
               <div>
                 <span className="text-xs font-bold tracking-wider text-gray-500 uppercase">Recommended for you</span>
                 <h2 className="text-2xl font-bold mt-1">{todaysGoal.title}</h2>
-                <p className="text-gray-500 text-sm mt-1">Chest + Shoulders + Triceps Focus</p>
+                {todaysGoal.focus && (
+                  <p className="text-gray-500 text-sm mt-1">{todaysGoal.focus}</p>
+                )}
                 <p className="text-gray-500 text-sm mt-1">{todaysGoal.duration} • {todaysGoal.level}</p>
               </div>
               <div className="bg-[#2bd96e]/10 p-3 rounded-full relative z-10">
@@ -218,15 +228,22 @@ const WorkoutsView = () => {
             </div>
             <div className="flex flex-col justify-center items-center relative z-10 space-y-3">
               <button 
-                onClick={() => navigate(`/workout/${todaysGoal.workoutId}`)}
-                className="w-full bg-white hover:bg-gray-100 text-black font-bold py-4 rounded-2xl flex items-center justify-center space-x-2 transition-all active:scale-[0.98] border border-[#a855f7]"
+                onClick={() => {
+                  if (todaysGoal.templateId) {
+                    // TODO: Template zu Workout-Session konvertieren oder direkt Template-ID verwenden
+                    navigate(`/workout/${todaysGoal.templateId}`);
+                  }
+                }}
+                disabled={!todaysGoal.templateId}
+                className="w-full bg-white hover:bg-gray-100 text-black font-bold py-4 rounded-2xl flex items-center justify-center space-x-2 transition-all active:scale-[0.98] border border-[#a855f7] disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <Play size={20} fill="currentColor" />
-                <span>Start {selectedCategory} Workout</span>
+                <span>Start Workout</span>
               </button>
               <button 
-                onClick={() => setPreviewWorkoutId(todaysGoal.workoutId)}
-                className="w-full bg-transparent hover:bg-white/5 text-white font-medium py-3 rounded-2xl flex items-center justify-center space-x-2 transition-all active:scale-[0.98] border border-white/20"
+                onClick={() => setPreviewTemplateId(todaysGoal.templateId)}
+                disabled={!todaysGoal.templateId}
+                className="w-full bg-transparent hover:bg-white/5 text-white font-medium py-3 rounded-2xl flex items-center justify-center space-x-2 transition-all active:scale-[0.98] border border-white/20 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <span>Preview Workout</span>
               </button>
@@ -256,9 +273,12 @@ const WorkoutsView = () => {
                         src={exercise.image}
                         onError={(e) => {
                           e.target.style.display = 'none';
+                          const fallback = e.target.nextElementSibling;
+                          if (fallback) fallback.style.display = 'flex';
                         }}
                       />
                       <div className="absolute inset-0 bg-black/10"></div>
+                      <div className="w-full h-full flex items-center justify-center text-4xl bg-gray-800 absolute inset-0" style={{ display: 'none' }}>💪</div>
                     </>
                   ) : (
                     <div className="w-full h-full flex items-center justify-center text-4xl bg-gray-800">💪</div>
@@ -274,7 +294,6 @@ const WorkoutsView = () => {
         <section>
           <div className="flex justify-between items-center mb-4">
             <h3 className="text-xl font-bold">Your {selectedCategory} Plans</h3>
-            <button className="text-[#2bd96e] text-sm font-medium">See All</button>
           </div>
           <div className="flex space-x-4 overflow-x-auto hide-scrollbar pb-2 -mx-5 px-5">
             {workoutPlans.map((plan) => {
@@ -369,12 +388,13 @@ const WorkoutsView = () => {
 
       {/* --- WORKOUT PREVIEW MODAL --- */}
       <WorkoutPreviewModal
-        isOpen={previewWorkoutId !== null}
-        onClose={() => setPreviewWorkoutId(null)}
-        workoutId={previewWorkoutId}
+        isOpen={previewTemplateId !== null}
+        onClose={() => setPreviewTemplateId(null)}
+        templateId={previewTemplateId}
         onStartWorkout={() => {
-          if (previewWorkoutId) {
-            navigate(`/workout/${previewWorkoutId}`);
+          if (previewTemplateId) {
+            // TODO: Template zu Workout-Session konvertieren oder direkt Template-ID verwenden
+            navigate(`/workout/${previewTemplateId}`);
           }
         }}
       />
